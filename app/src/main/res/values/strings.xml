@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TitanPointer</string>
+    <string name="service_label">TitanPointer</string>
+    <string name="tile_label">Keyboard pointer</string>
+    <string name="pointer_on">Keyboard pointer on</string>
+    <string name="pointer_off">Keyboard pointer off</string>
+    <string name="service_description">Turns the Titan\'s touch-sensitive keyboard into a touchpad. Shows an on-screen pointer, taps where it points, and watches key presses so typing is not mistaken for touchpad use and so a shortcut key can toggle the pointer. Nothing is collected or sent anywhere.</string>
+</resources>
