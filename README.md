@@ -17,7 +17,7 @@ Typing is detected automatically: touches during and just after a key press don'
 
 ## Install
 
-1. Install `dist/TitanPointer-1.0.apk` (or build it, see below).
+1. Install `dist/TitanPointer-1.1.apk` (or build it, see below).
 2. Open **TitanPointer** and follow the steps on screen:
    1. **Turn on the accessibility service** (Settings → Accessibility → TitanPointer). It draws the
       pointer, injects taps, and watches key presses to tell typing apart from touchpad use.

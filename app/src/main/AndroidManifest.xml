@@ -21,6 +21,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ProbeActivity"
+            android:exported="false"
+            android:label="Keyboard input probe" />
+
         <service
             android:name=".PointerService"
             android:exported="true"

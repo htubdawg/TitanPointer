@@ -91,6 +91,10 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     // ---------------------------------------------------------------- UI
 
     private void build() {
+        section("No-root test");
+        hint("Checks what the Titan's keyboard sends to ordinary apps, with no root or ADB. Copy the results and share them.");
+        button("Open keyboard input probe", v -> startActivity(new Intent(this, ProbeActivity.class)));
+
         // --- Status
         section("1. Turn on the service");
         accessibilityStatus = text("");
