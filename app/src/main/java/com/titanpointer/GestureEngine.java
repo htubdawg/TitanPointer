@@ -76,6 +76,8 @@ public final class GestureEngine implements TouchTracker.Listener {
     private boolean keyDuringTouch;
     private int mode = MODE_NONE;
     private boolean scrollActive = false;
+    /** When on, one-finger slides scroll instead of moving the pointer (for single-touch pads). */
+    private boolean scrollLock = false;
     private boolean dragCandidate = false;
     private boolean clickOwed = false;
     private long lastTapUp = -1;
@@ -118,6 +120,19 @@ public final class GestureEngine implements TouchTracker.Listener {
         }
         dragCandidate = false;
         clickOwed = false;
+    }
+
+    public void setScrollLock(boolean on) {
+        if (scrollLock == on) return;
+        scrollLock = on;
+        if (!on && scrollActive && mode != MODE_SCROLL) {
+            scrollActive = false;
+            actions.onScrollEnd();
+        }
+    }
+
+    public boolean isScrollLock() {
+        return scrollLock;
     }
 
     /** Abandon any gesture in progress (e.g. when pointer mode is switched off). */
@@ -194,6 +209,16 @@ public final class GestureEngine implements TouchTracker.Listener {
         travel += dist;
         if (travel > cfg.tapSlop) moved = true;
 
+        if (scrollLock && mode != MODE_DRAG) {
+            if (!moved || keyDuringTouch) return;
+            if (!scrollActive) {
+                scrollActive = true;
+                actions.onScrollBegin();
+            }
+            float k = cfg.screenWidthPx * cfg.scrollSpeed * (cfg.invertScroll ? -1f : 1f);
+            actions.onScroll(du * k, dv * k);
+            return;
+        }
         if (dragCandidate && moved && mode != MODE_DRAG && !keyDuringTouch) {
             mode = MODE_DRAG;
             clickOwed = false;

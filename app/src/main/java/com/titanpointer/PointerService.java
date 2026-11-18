@@ -9,11 +9,16 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
+import android.view.InputDevice;
+import android.view.MotionEvent;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Draws the pointer and turns touchpad gestures into injected touches. Being an accessibility service
@@ -46,6 +51,13 @@ public final class PointerService extends AccessibilityService
     private int screenW, screenH;
     private float scrollX, scrollY; // injected finger position during a scroll
     private boolean dragging = false;
+    private boolean toggleDown = false;
+
+    // No-root mode: an invisible focused window receives the keyboard's touchpad events.
+    private View catcher;
+    private boolean usingCatcher = false;
+    private int catcherDevice = -1;
+    private final List<TouchTracker.Contact> contacts = new ArrayList<>();
 
     private final Runnable autoHide = () -> setCursorVisible(false);
 
@@ -117,13 +129,22 @@ public final class PointerService extends AccessibilityService
 
     // ---- Activation ----
 
+    static boolean isNoRoot(SharedPreferences p) {
+        return Prefs.MODE_NOROOT.equals(p.getString(Prefs.MODE, Prefs.MODE_NOROOT));
+    }
+
     private void activate() {
         if (active) return;
         active = true;
         tracker.reset();
+        engine.setScrollLock(false);
         engine.setConfig(Prefs.engineConfig(this, screenW));
-        link.setGrab(prefs.getBoolean(Prefs.GRAB, false));
-        link.setOpen(OWNER, true);
+        if (isNoRoot(prefs)) {
+            addCatcher();
+        } else {
+            link.setGrab(prefs.getBoolean(Prefs.GRAB, false));
+            link.setOpen(OWNER, true);
+        }
         setCursorVisible(true);
     }
 
@@ -131,10 +152,132 @@ public final class PointerService extends AccessibilityService
         if (!active) return;
         active = false;
         engine.reset();
+        engine.setScrollLock(false);
         injector.endStream();
+        removeCatcher();
         link.setGrab(false);
         link.setOpen(OWNER, false);
+        if (cursor != null) cursor.setState(CursorView.STATE_NORMAL);
         setCursorVisible(false);
+    }
+
+    // ---- No-root input: focused invisible window ----
+
+    private void addCatcher() {
+        if (usingCatcher) return;
+        catcher = new View(this) {
+            @Override
+            public boolean onGenericMotionEvent(MotionEvent e) {
+                if (e.isFromSource(InputDevice.SOURCE_TOUCHPAD)) {
+                    onTouchpad(e);
+                    return true;
+                }
+                return super.onGenericMotionEvent(e);
+            }
+
+            @Override
+            public boolean onKeyDown(int keyCode, KeyEvent event) {
+                return !isSystemKey(keyCode); // let volume etc. fall back to the system
+            }
+
+            @Override
+            public boolean onKeyUp(int keyCode, KeyEvent event) {
+                return !isSystemKey(keyCode);
+            }
+        };
+        catcher.setFocusable(true);
+        catcher.setFocusableInTouchMode(true);
+        WindowManager.LayoutParams p = new WindowManager.LayoutParams(1, 1,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSPARENT);
+        p.gravity = Gravity.TOP | Gravity.START;
+        try {
+            wm.addView(catcher, p);
+            usingCatcher = true;
+            catcher.requestFocus();
+        } catch (RuntimeException e) {
+            catcher = null;
+            Toast.makeText(this, "TitanPointer could not take keyboard focus", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void removeCatcher() {
+        if (!usingCatcher) return;
+        usingCatcher = false;
+        try {
+            wm.removeView(catcher);
+        } catch (RuntimeException ignored) {
+        }
+        catcher = null;
+        contacts.clear();
+    }
+
+    /** Touchpad MotionEvent (raw device units) -> contacts for the gesture engine. */
+    private void onTouchpad(MotionEvent e) {
+        if (!active) return;
+        if (e.getDeviceId() != catcherDevice) {
+            catcherDevice = e.getDeviceId();
+            InputDevice d = e.getDevice();
+            InputDevice.MotionRange rx = d == null ? null : d.getMotionRange(MotionEvent.AXIS_X, e.getSource());
+            InputDevice.MotionRange ry = d == null ? null : d.getMotionRange(MotionEvent.AXIS_Y, e.getSource());
+            if (rx != null && ry != null) {
+                prefs.edit().putString(Prefs.DEVICE_NAME, d.getName()).apply();
+                onDeviceOpened((int) rx.getMin(), (int) rx.getMax(), (int) ry.getMin(), (int) ry.getMax(), 1);
+            }
+        }
+        int action = e.getActionMasked();
+        contacts.clear();
+        if (action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL) {
+            int skip = action == MotionEvent.ACTION_POINTER_UP ? e.getActionIndex() : -1;
+            for (int i = 0; i < e.getPointerCount(); i++) {
+                if (i == skip) continue;
+                contacts.add(new TouchTracker.Contact(e.getPointerId(i), Math.round(e.getX(i)), Math.round(e.getY(i))));
+            }
+        }
+        engine.onFrame(contacts);
+    }
+
+    /** Keys while the no-root focus window is active. Returns true if consumed. */
+    private boolean onPointerModeKey(KeyEvent event) {
+        int k = event.getKeyCode();
+        boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
+        if (KeyEvent.isModifierKey(k)) return false; // let Alt/Shift/Sym through for combinations
+        switch (k) {
+            case KeyEvent.KEYCODE_ENTER:
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+                engine.onKeyActivity(); // the key press itself also touched the pad
+                if (down && event.getRepeatCount() == 0) {
+                    if (event.isAltPressed()) onSecondaryClick();
+                    else onClick();
+                }
+                return true;
+            case KeyEvent.KEYCODE_SPACE:
+                engine.onKeyActivity();
+                if (down && event.getRepeatCount() == 0) {
+                    boolean on = !engine.isScrollLock();
+                    engine.setScrollLock(on);
+                    cursor.setState(on ? CursorView.STATE_SCROLL : CursorView.STATE_NORMAL);
+                    setCursorVisible(true);
+                }
+                return true;
+            case KeyEvent.KEYCODE_BACK:
+            case KeyEvent.KEYCODE_ESCAPE:
+                if (!down) performGlobalAction(GLOBAL_ACTION_BACK);
+                return true;
+            case KeyEvent.KEYCODE_DEL:
+                if (!down) performGlobalAction(GLOBAL_ACTION_BACK);
+                return true;
+            default:
+                if (isSystemKey(k)) return false;
+                // Any other key means "I want to type": leave pointer mode. This key press is used up.
+                if (down) {
+                    prefs.edit().putBoolean(Prefs.ENABLED, false).apply();
+                    Toast.makeText(this, R.string.typing_mode, Toast.LENGTH_SHORT).show();
+                }
+                return true;
+        }
     }
 
     private void toggle() {
@@ -160,8 +303,13 @@ public final class PointerService extends AccessibilityService
                 placeCursor();
                 break;
             case Prefs.MODE:
+                if (active) {
+                    deactivate();
+                    activate();
+                }
+                break;
             case Prefs.DEVICE:
-                if (active) link.restart();
+                if (active && !isNoRoot(p)) link.restart();
                 break;
             default:
                 engine.setConfig(Prefs.engineConfig(this, screenW));
@@ -197,16 +345,24 @@ public final class PointerService extends AccessibilityService
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
-        int toggleKey = prefs.getInt(Prefs.TOGGLE_KEY, 0);
+        int toggleKey = prefs.getInt(Prefs.TOGGLE_KEY, Prefs.DEFAULT_TOGGLE_KEY);
         if (toggleKey != 0 && event.getKeyCode() == toggleKey) {
-            int want = prefs.getInt(Prefs.TOGGLE_META, 0);
+            int want = prefs.getInt(Prefs.TOGGLE_META, Prefs.DEFAULT_TOGGLE_META);
             int meta = event.getMetaState() & (KeyEvent.META_ALT_ON | KeyEvent.META_SHIFT_ON | KeyEvent.META_CTRL_ON
                     | KeyEvent.META_SYM_ON);
-            if (normalizeMeta(meta) == normalizeMeta(want)) {
-                if (event.getAction() == KeyEvent.ACTION_UP) toggle();
+            if (event.getAction() == KeyEvent.ACTION_DOWN && normalizeMeta(meta) == normalizeMeta(want)) {
+                if (event.getRepeatCount() == 0) {
+                    toggleDown = true;
+                    toggle();
+                }
+                return true;
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP && toggleDown) {
+                toggleDown = false; // Alt may already be released by now
                 return true;
             }
         }
+        if (active && usingCatcher) return onPointerModeKey(event);
         if (active && event.getAction() == KeyEvent.ACTION_DOWN && !isNavKey(event.getKeyCode())) {
             engine.onKeyActivity();
         }
@@ -220,6 +376,15 @@ public final class PointerService extends AccessibilityService
         if ((m & KeyEvent.META_CTRL_ON) != 0) r |= KeyEvent.META_CTRL_ON;
         if ((m & KeyEvent.META_SYM_ON) != 0) r |= KeyEvent.META_SYM_ON;
         return r;
+    }
+
+    private static boolean isSystemKey(int k) {
+        return k == KeyEvent.KEYCODE_VOLUME_UP || k == KeyEvent.KEYCODE_VOLUME_DOWN || k == KeyEvent.KEYCODE_VOLUME_MUTE
+                || k == KeyEvent.KEYCODE_POWER || k == KeyEvent.KEYCODE_HOME || k == KeyEvent.KEYCODE_APP_SWITCH
+                || k == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || k == KeyEvent.KEYCODE_MEDIA_PLAY
+                || k == KeyEvent.KEYCODE_MEDIA_PAUSE || k == KeyEvent.KEYCODE_MEDIA_NEXT
+                || k == KeyEvent.KEYCODE_MEDIA_PREVIOUS || k == KeyEvent.KEYCODE_HEADSETHOOK
+                || k == KeyEvent.KEYCODE_CAMERA || k == KeyEvent.KEYCODE_CALL || k == KeyEvent.KEYCODE_ENDCALL;
     }
 
     private static boolean isNavKey(int k) {

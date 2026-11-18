@@ -203,6 +203,18 @@ public class GestureEngineTest {
     }
 
     @Test
+    public void scrollLockMakesOneFingerScroll() {
+        engine.setScrollLock(true);
+        frame(0, 1, 500, 100);
+        for (int i = 1; i <= 5; i++) { advance(10); frame(0, 1, 500, 100 + i * 20); }
+        advance(10); frame(0, -1, 0, 0);
+        advance(1000);
+        assertEquals(List.of("scrollBegin", "scrollEnd"), log);
+        assertTrue(scrollY > 50);
+        assertEquals(0f, moveY, 0.01f);
+    }
+
+    @Test
     public void parsesDeviceLine() {
         InputDeviceInfo d = InputDeviceInfo.parse("D /dev/input/event3\tmtk-kpd-touch\t0\t2\t0 1079 0 399\t10\t0");
         assertEquals("/dev/input/event3", d.path);

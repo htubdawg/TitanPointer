@@ -46,6 +46,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     private Button accessibilityButton;
     private Switch enabledSwitch, grabSwitch, zoneSwitch;
     private View adbBox;
+    private LinearLayout noRootBox, rootBox;
     private TestPadView testPad;
     private Button calibrateButton;
     private TouchTracker testTracker;
@@ -76,7 +77,8 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     protected void onResume() {
         super.onResume();
         link.addListener(this);
-        link.setOpen(OWNER, prefs.getString(Prefs.DEVICE, null) != null);
+        link.setOpen(OWNER, prefs.getString(Prefs.DEVICE, null) != null
+                && !Prefs.MODE_NOROOT.equals(prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT)));
         refresh();
     }
 
@@ -91,40 +93,62 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     // ---------------------------------------------------------------- UI
 
     private void build() {
-        section("No-root test");
-        hint("Checks what the Titan's keyboard sends to ordinary apps, with no root or ADB. Copy the results and share them.");
-        button("Open keyboard input probe", v -> startActivity(new Intent(this, ProbeActivity.class)));
-
         // --- Status
         section("1. Turn on the service");
         accessibilityStatus = text("");
         accessibilityButton = button("Open Accessibility settings", v ->
                 startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         enabledSwitch = switchPref(Prefs.ENABLED, "Pointer mode", true);
-        hint("Toggle quickly with the Quick Settings tile “Keyboard pointer” or a shortcut key (below).");
+        hint("Toggle with Alt + Space (change it under Toggle shortcut), or the Quick Settings tile “Keyboard pointer”.");
 
         // --- Connection
-        section("2. Give it access to the keyboard sensor");
-        hint("Android only lets privileged code read the raw touch sensor, so a tiny helper reads it for the app. "
-                + "Use root if your Titan is rooted (Magisk), otherwise start the helper once per boot over ADB.");
+        section("2. How to read the keyboard");
         RadioGroup rg = new RadioGroup(this);
+        RadioButton rNo = new RadioButton(this);
+        rNo.setText("No root (recommended)");
+        rNo.setId(View.generateViewId());
         RadioButton rRoot = new RadioButton(this);
-        rRoot.setText("Root (su)");
+        rRoot.setText("Root (su): typing and pointer at the same time");
         rRoot.setId(View.generateViewId());
         RadioButton rAdb = new RadioButton(this);
-        rAdb.setText("ADB helper (no root)");
+        rAdb.setText("ADB helper: like root, started from a computer");
         rAdb.setId(View.generateViewId());
+        rg.addView(rNo);
         rg.addView(rRoot);
         rg.addView(rAdb);
-        boolean adb = "adb".equals(prefs.getString(Prefs.MODE, "root"));
-        rg.check(adb ? rAdb.getId() : rRoot.getId());
+        String mode = prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT);
+        rg.check("adb".equals(mode) ? rAdb.getId() : "root".equals(mode) ? rRoot.getId() : rNo.getId());
         rg.setOnCheckedChangeListener((g, id) -> {
-            prefs.edit().putString(Prefs.MODE, id == rAdb.getId() ? "adb" : "root").apply();
+            prefs.edit().putString(Prefs.MODE, id == rAdb.getId() ? "adb" : id == rRoot.getId() ? "root" : Prefs.MODE_NOROOT).apply();
             refresh();
+            boolean helper = id != rNo.getId();
+            link.setOpen(OWNER, helper && prefs.getString(Prefs.DEVICE, null) != null);
             link.restart();
         });
         root.addView(rg);
 
+        LinearLayout outer = root;
+        noRootBox = new LinearLayout(this);
+        noRootBox.setOrientation(LinearLayout.VERTICAL);
+        outer.addView(noRootBox);
+        root = noRootBox;
+        hint("The Titan reports keyboard touches to the app that has keyboard focus, so while pointer mode is on, "
+                + "TitanPointer holds the focus and the keys get pointer jobs:");
+        text("• Slide: move the pointer · Tap: click\n"
+                + "• Enter: click · Alt + Enter: long press\n"
+                + "• Space: scroll lock on/off (slides scroll instead of moving)\n"
+                + "• Backspace or Back: go back\n"
+                + "• Any letter: leave pointer mode and type (that key press is used up)\n"
+                + "• Alt + Space: pointer mode on/off");
+        button("Open keyboard input probe", v -> startActivity(new Intent(this, ProbeActivity.class)));
+        root = outer;
+
+        rootBox = new LinearLayout(this);
+        rootBox.setOrientation(LinearLayout.VERTICAL);
+        outer.addView(rootBox);
+        root = rootBox;
+        hint("A tiny helper reads the raw sensor directly, so typing keeps working while the pointer is on. "
+                + "Root asks for su; the ADB helper is started from a computer once per boot.");
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         adbBox = box;
@@ -184,6 +208,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         row.addView(calibrateButton);
         root.addView(row);
         zoneSwitch = switchPref(Prefs.ZONE_ON, "Only use the calibrated area", false);
+        root = outer;
 
         // --- Orientation
         section("Direction");
@@ -285,8 +310,11 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         accessibilityButton.setVisibility(svc ? View.GONE : View.VISIBLE);
         enabledSwitch.setChecked(prefs.getBoolean(Prefs.ENABLED, true));
 
-        boolean adb = "adb".equals(prefs.getString(Prefs.MODE, "root"));
-        adbBox.setVisibility(adb ? View.VISIBLE : View.GONE);
+        String mode = prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT);
+        boolean noRoot = Prefs.MODE_NOROOT.equals(mode);
+        noRootBox.setVisibility(noRoot ? View.VISIBLE : View.GONE);
+        rootBox.setVisibility(noRoot ? View.GONE : View.VISIBLE);
+        adbBox.setVisibility("adb".equals(mode) ? View.VISIBLE : View.GONE);
         adbCommand.setText(adbCommandText());
 
         String dev = prefs.getString(Prefs.DEVICE, null);
@@ -297,11 +325,11 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         testPad.setZone(prefs.getBoolean(Prefs.ZONE_ON, false) ? new int[] {prefs.getInt(Prefs.ZONE_XMIN, 0),
                 prefs.getInt(Prefs.ZONE_XMAX, 0), prefs.getInt(Prefs.ZONE_YMIN, 0), prefs.getInt(Prefs.ZONE_YMAX, 0)} : null);
 
-        int key = prefs.getInt(Prefs.TOGGLE_KEY, 0);
+        int key = prefs.getInt(Prefs.TOGGLE_KEY, Prefs.DEFAULT_TOGGLE_KEY);
         if (key == 0) {
             toggleKeyText.setText("No shortcut set");
         } else {
-            int m = prefs.getInt(Prefs.TOGGLE_META, 0);
+            int m = prefs.getInt(Prefs.TOGGLE_META, Prefs.DEFAULT_TOGGLE_META);
             StringBuilder sb = new StringBuilder("Shortcut: ");
             if ((m & KeyEvent.META_CTRL_ON) != 0) sb.append("Ctrl + ");
             if ((m & KeyEvent.META_ALT_ON) != 0) sb.append("Alt + ");

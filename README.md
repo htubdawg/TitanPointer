@@ -17,7 +17,7 @@ Typing is detected automatically: touches during and just after a key press don'
 
 ## Install
 
-1. Install `dist/TitanPointer-1.1.apk` (or build it, see below).
+1. Install `dist/TitanPointer-1.2.apk` (or build it, see below).
 2. Open **TitanPointer** and follow the steps on screen:
    1. **Turn on the accessibility service** (Settings → Accessibility → TitanPointer). It draws the
       pointer, injects taps, and watches key presses to tell typing apart from touchpad use.
@@ -28,7 +28,25 @@ Typing is detected automatically: touches during and just after a key press don'
 3. Turn pointer mode on or off with the Quick Settings tile **Keyboard pointer**, the switch in the
    app, or a shortcut key you choose.
 
-### Why root or ADB is needed
+### No-root mode (default)
+
+The Titan's keyboard sensor shows up to apps as its own touchpad device (`mtk-pad`, 1440×720, absolute
+positions), but Android only sends its events to the window with keyboard focus. In no-root mode, while
+pointer mode is on, TitanPointer keeps an invisible window focused (screen touches pass straight through),
+so the keys get pointer jobs:
+
+| Key | Action |
+|---|---|
+| Enter | Click · Alt + Enter: long press |
+| Space | Scroll lock on/off (slides scroll instead of moving the pointer) |
+| Backspace / Back | Back |
+| Any letter | Leave pointer mode and type (that key press is used up) |
+| Alt + Space | Pointer mode on/off (changeable) |
+
+Only one finger is reported this way, so use Space for scrolling. Root or ADB mode reads the sensor directly
+and lets you type while the pointer is on.
+
+### Root or ADB mode
 
 Android doesn't let normal apps read raw touch data from the keyboard's sensor. TitanPointer ships a tiny
 helper (`native/titanpad.c`, about 300 lines) that reads `/dev/input/eventN` and passes the touches to

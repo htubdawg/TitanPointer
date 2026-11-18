@@ -9,7 +9,8 @@ import java.security.SecureRandom;
 public final class Prefs {
     public static final String FILE = "titanpointer";
 
-    public static final String MODE = "mode"; // "root" or "adb"
+    public static final String MODE = "mode"; // "noroot", "root" or "adb"
+    public static final String MODE_NOROOT = "noroot";
     public static final String DEVICE = "device"; // /dev/input/eventN
     public static final String DEVICE_NAME = "device_name";
     public static final String RAW_XMIN = "raw_xmin", RAW_XMAX = "raw_xmax", RAW_YMIN = "raw_ymin", RAW_YMAX = "raw_ymax";
@@ -24,6 +25,9 @@ public final class Prefs {
     public static final String CURSOR_SIZE = "cursor_size";
     public static final String ENABLED = "enabled"; // pointer mode on/off
     public static final String TOGGLE_KEY = "toggle_key", TOGGLE_META = "toggle_meta";
+    /** Alt + Space toggles pointer mode unless the user picks something else. */
+    public static final int DEFAULT_TOGGLE_KEY = android.view.KeyEvent.KEYCODE_SPACE;
+    public static final int DEFAULT_TOGGLE_META = android.view.KeyEvent.META_ALT_ON;
     public static final String ADB_PORT = "adb_port", ADB_TOKEN = "adb_token";
 
     private Prefs() {}
