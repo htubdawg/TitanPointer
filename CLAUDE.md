@@ -91,6 +91,11 @@ touchpad events. Pointer mode now hides the keyboard app (SHOW_MODE_HIDDEN) and 
 field (needs canRetrieveWindowContent, added to the service config); both are undone when it goes off
 (focus is put back only if no other field took it). Logged in Diag. Not yet confirmed on the phone.
 
+## v1.8
+The foreground notification showed on the user's lock screen. It's now VISIBILITY_SECRET on both the
+notification and a new channel `keepalive_hidden` (the old `keepalive` channel is deleted, since channel
+settings can't change after creation). The user declined battery changes (screen-off auto-off, retry cap).
+
 ## Open items / ideas
 - Confirm the 22% top-row cut-off and raw Y direction on the phone.
 - Root/ADB path: confirm `/dev/input` names/ranges on a real Titan and test the grab behavior.
