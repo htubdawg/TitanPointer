@@ -9,6 +9,7 @@ on-screen pointer. Status at v1.2: the user reports the no-root mode is "mostly 
   `versionCode`/`versionName` in `app/build.gradle` for each APK you send.
 - Listen to what they say they observed. They were right that a no-root app can read the keyboard touches.
 - Develop on the branch the session names (v1.3–1.5 were on `ccr-40c55928-ihkbz5`). Don't open a PR unless asked.
+- **Never push or merge to `main`.** Push only to the session's branch; the user merges.
 - Hardware facts live in `docs/titan-hardware.md`. Research the phone yourself (specs, photos) rather than asking the user to measure.
 
 - **Signing**: builds use `signing/titanpointer.keystore` (committed). Never change it, or the user has to
