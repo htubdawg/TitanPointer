@@ -1,22 +1,19 @@
 package com.titanpointer;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Laptop-touchpad style gesture recognition on top of {@link TouchTracker} frames.
+ * Touchpad gestures for a single-touch pad (the Titan's keyboard only reports one finger).
  *
  * <ul>
- *   <li>1 finger move: move the pointer (with acceleration)</li>
- *   <li>1 finger tap: click</li>
- *   <li>tap, then touch again and move: drag (press-and-hold drag)</li>
+ *   <li>slide: move the pointer (with acceleration)</li>
+ *   <li>tap: click</li>
  *   <li>tap twice: double click</li>
- *   <li>2 finger move: scroll</li>
- *   <li>2 finger tap: long press (secondary click)</li>
- *   <li>3 finger tap: configurable (default: Back)</li>
+ *   <li>tap, then touch again and slide: drag (optional)</li>
+ *   <li>scroll mode on: slides scroll instead, and taps never click</li>
  * </ul>
  *
+ * Touches that start in the keyboard's top row (Back, Recents, home) are ignored entirely.
  * Pure Java with no Android dependencies so it can be unit tested on the JVM.
  */
 public final class GestureEngine implements TouchTracker.Listener {
@@ -24,8 +21,6 @@ public final class GestureEngine implements TouchTracker.Listener {
     public interface Actions {
         void onPointerMove(float dx, float dy);
         void onClick();
-        void onSecondaryClick();
-        void onTertiaryTap();
         void onScrollBegin();
         void onScroll(float dx, float dy);
         void onScrollEnd();
@@ -47,7 +42,7 @@ public final class GestureEngine implements TouchTracker.Listener {
         public int xMin = 0, xMax = 1000, yMin = 0, yMax = 1000;
         public boolean swapXY = false, invertX = false, invertY = false;
         public float screenWidthPx = 1440f;
-        public float sensitivity = 2.0f;
+        public float sensitivity = 0.7f;
         public float acceleration = 1.0f;
         public float ySpeed = 1.0f;
         public float scrollSpeed = 1.5f;
@@ -57,7 +52,14 @@ public final class GestureEngine implements TouchTracker.Listener {
         public long tapTimeoutMs = 220;
         public long doubleTapWindowMs = 260;
         public float tapSlop = 0.035f;
+        /** A slide must travel this far before scrolling starts, so small wobbles never scroll. */
+        public float scrollSlop = 0.06f;
         public long typingSuppressMs = 350;
+        /**
+         * Touches that start in this top fraction of the device's raw Y range are ignored (the Titan's
+         * top keyboard row: Shift, Recents, home, Back, Alt). Measured on raw device Y, before swap/invert.
+         */
+        public float ignoreTopFrac = 0f;
     }
 
     private static final int MODE_NONE = 0, MODE_POINTER = 1, MODE_SCROLL = 2, MODE_DRAG = 3;
@@ -68,24 +70,22 @@ public final class GestureEngine implements TouchTracker.Listener {
     private Config cfg = new Config();
 
     private boolean touching = false;
+    private boolean ignored = false; // this touch started in the ignored zone
     private long touchStart;
     private long lastFrameTime;
-    private int maxFingers;
     private boolean moved;
     private float travel;
     private boolean keyDuringTouch;
     private int mode = MODE_NONE;
     private boolean scrollActive = false;
-    /** When on, one-finger slides scroll instead of moving the pointer (for single-touch pads). */
     private boolean scrollLock = false;
     private boolean dragCandidate = false;
     private boolean clickOwed = false;
     private long lastTapUp = -1;
     private long lastKeyTime = Long.MIN_VALUE / 2;
 
-    // Previous frame, normalized coordinates by tracking id.
-    private final Map<Integer, float[]> prev = new HashMap<>();
-    private final Map<Integer, float[]> cur = new HashMap<>();
+    private int trackedId;
+    private float[] prev; // previous normalized position of the tracked finger
 
     private final Runnable pendingClick = new Runnable() {
         @Override
@@ -110,14 +110,11 @@ public final class GestureEngine implements TouchTracker.Listener {
         return cfg;
     }
 
-    /** Call for every physical key press so typing on the keyboard is not mistaken for touchpad use. */
+    /** Call for every physical key press so typing (or a key on the pad) isn't taken as touchpad use. */
     public void onKeyActivity() {
         lastKeyTime = clock.now();
         if (touching) keyDuringTouch = true;
-        if (clickPending) {
-            scheduler.cancel(pendingClick);
-            clickPending = false;
-        }
+        cancelPendingClick();
         dragCandidate = false;
         clickOwed = false;
     }
@@ -125,7 +122,8 @@ public final class GestureEngine implements TouchTracker.Listener {
     public void setScrollLock(boolean on) {
         if (scrollLock == on) return;
         scrollLock = on;
-        if (!on && scrollActive && mode != MODE_SCROLL) {
+        cancelPendingClick();
+        if (!on && scrollActive) {
             scrollActive = false;
             actions.onScrollEnd();
         }
@@ -139,58 +137,75 @@ public final class GestureEngine implements TouchTracker.Listener {
     public void reset() {
         if (scrollActive) actions.onScrollEnd();
         if (mode == MODE_DRAG) actions.onDragEnd();
-        if (clickPending) scheduler.cancel(pendingClick);
-        clickPending = false;
+        cancelPendingClick();
         touching = false;
+        ignored = false;
         scrollActive = false;
         mode = MODE_NONE;
         dragCandidate = false;
         clickOwed = false;
-        prev.clear();
+        prev = null;
+    }
+
+    private void cancelPendingClick() {
+        if (clickPending) scheduler.cancel(pendingClick);
+        clickPending = false;
     }
 
     @Override
     public void onFrame(List<TouchTracker.Contact> contacts) {
         long now = clock.now();
-        cur.clear();
-        for (TouchTracker.Contact c : contacts) {
-            float[] p = normalize(c.x, c.y);
-            if (p != null) cur.put(c.id, p);
+        // Only contacts inside the active zone count; prefer the finger we're already tracking.
+        TouchTracker.Contact c = null;
+        for (TouchTracker.Contact x : contacts) {
+            if (normalize(x.x, x.y) == null) continue;
+            if (c == null || (touching && x.id == trackedId)) c = x;
         }
-        int n = cur.size();
 
-        if (n > 0 && !touching) begin(now, n);
+        if (c == null) {
+            if (touching) end(now);
+            prev = null;
+            lastFrameTime = now;
+            return;
+        }
+        if (!touching) {
+            begin(now, c);
+        } else if (c.id != trackedId) {
+            trackedId = c.id; // a different finger took over: no jump
+            prev = null;
+        }
 
-        if (touching) {
-            if (n > maxFingers) maxFingers = n;
+        float[] p = normalize(c.x, c.y);
+        if (!ignored && p != null && prev != null) {
             float dt = Math.max(5f, now - lastFrameTime) / 1000f;
-            if (n == 1 && (maxFingers == 1 || mode == MODE_DRAG)) {
-                oneFinger(now, dt);
-            } else if (n >= 2 && mode != MODE_DRAG) {
-                multiFinger();
-            }
-            if (n == 0) end(now);
+            slide(now, p[0] - prev[0], p[1] - prev[1], dt);
         }
-
-        prev.clear();
-        for (Map.Entry<Integer, float[]> e : cur.entrySet()) prev.put(e.getKey(), e.getValue());
+        prev = p;
         lastFrameTime = now;
     }
 
-    private void begin(long now, int n) {
+    private void begin(long now, TouchTracker.Contact c) {
         touching = true;
+        trackedId = c.id;
         touchStart = now;
         lastFrameTime = now;
-        maxFingers = n;
         moved = false;
         travel = 0;
+        prev = null;
         keyDuringTouch = now - lastKeyTime < cfg.typingSuppressMs;
         scrollActive = false;
-        mode = n >= 2 ? MODE_SCROLL : MODE_POINTER;
-        prev.clear();
-        if (clickPending && cfg.tapDrag && now - lastTapUp <= cfg.doubleTapWindowMs) {
-            scheduler.cancel(pendingClick);
-            clickPending = false;
+        mode = MODE_POINTER;
+        float yRange = Math.max(1, cfg.yMax - cfg.yMin);
+        ignored = cfg.ignoreTopFrac > 0 && (c.y - cfg.yMin) / yRange < cfg.ignoreTopFrac;
+        if (ignored) {
+            // Most likely Back/Recents: don't let it complete an earlier tap or start a drag.
+            cancelPendingClick();
+            dragCandidate = false;
+            clickOwed = false;
+            return;
+        }
+        if (clickPending && cfg.tapDrag && !scrollLock && now - lastTapUp <= cfg.doubleTapWindowMs) {
+            cancelPendingClick();
             dragCandidate = true;
             clickOwed = true;
         } else {
@@ -199,20 +214,17 @@ public final class GestureEngine implements TouchTracker.Listener {
         }
     }
 
-    private void oneFinger(long now, float dt) {
-        Map.Entry<Integer, float[]> e = cur.entrySet().iterator().next();
-        float[] p = e.getValue();
-        float[] q = prev.get(e.getKey());
-        if (q == null) return; // new finger: no delta yet
-        float du = p[0] - q[0], dv = p[1] - q[1];
+    private void slide(long now, float du, float dv, float dt) {
         float dist = (float) Math.hypot(du, dv);
         travel += dist;
         if (travel > cfg.tapSlop) moved = true;
 
         if (scrollLock && mode != MODE_DRAG) {
-            if (!moved || keyDuringTouch) return;
+            if (keyDuringTouch) return;
             if (!scrollActive) {
+                if (travel < cfg.scrollSlop) return;
                 scrollActive = true;
+                mode = MODE_SCROLL;
                 actions.onScrollBegin();
             }
             float k = cfg.screenWidthPx * cfg.scrollSpeed * (cfg.invertScroll ? -1f : 1f);
@@ -225,7 +237,6 @@ public final class GestureEngine implements TouchTracker.Listener {
             actions.onDragBegin();
         }
         if (keyDuringTouch || now - lastKeyTime < cfg.typingSuppressMs) return;
-        if (mode == MODE_SCROLL) return;
 
         float speed = dist / dt; // pad widths per second
         float accel = 1f + cfg.acceleration * clamp((speed - 0.15f) / 0.8f, 0f, 3f);
@@ -233,35 +244,13 @@ public final class GestureEngine implements TouchTracker.Listener {
         actions.onPointerMove(du * k, dv * k);
     }
 
-    private void multiFinger() {
-        mode = MODE_SCROLL;
-        float cu = 0, cv = 0, pu = 0, pv = 0;
-        int matched = 0;
-        for (Map.Entry<Integer, float[]> e : cur.entrySet()) {
-            float[] q = prev.get(e.getKey());
-            if (q == null) continue;
-            float[] p = e.getValue();
-            cu += p[0];
-            cv += p[1];
-            pu += q[0];
-            pv += q[1];
-            matched++;
-        }
-        if (matched == 0) return;
-        float du = (cu - pu) / matched, dv = (cv - pv) / matched;
-        travel += (float) Math.hypot(du, dv);
-        if (travel > cfg.tapSlop) moved = true;
-        if (!moved || keyDuringTouch) return;
-        if (!scrollActive) {
-            scrollActive = true;
-            actions.onScrollBegin();
-        }
-        float k = cfg.screenWidthPx * cfg.scrollSpeed * (cfg.invertScroll ? -1f : 1f);
-        actions.onScroll(du * k, dv * k);
-    }
-
     private void end(long now) {
         touching = false;
+        if (ignored) {
+            ignored = false;
+            mode = MODE_NONE;
+            return;
+        }
         long dur = now - touchStart;
         if (scrollActive) {
             scrollActive = false;
@@ -271,23 +260,19 @@ public final class GestureEngine implements TouchTracker.Listener {
         mode = MODE_NONE;
         if (wasDrag) {
             actions.onDragEnd();
-        } else if (!moved && dur <= cfg.tapTimeoutMs && !keyDuringTouch) {
-            if (maxFingers == 1 && cfg.tapToClick) {
-                if (clickOwed) {
-                    actions.onClick();
-                    actions.onClick();
-                    lastTapUp = -1;
-                } else if (cfg.tapDrag) {
-                    clickPending = true;
-                    lastTapUp = now;
-                    scheduler.post(pendingClick, cfg.doubleTapWindowMs);
-                } else {
-                    actions.onClick();
-                }
-            } else if (maxFingers == 2) {
-                actions.onSecondaryClick();
-            } else if (maxFingers >= 3) {
-                actions.onTertiaryTap();
+        } else if (scrollLock) {
+            // Scroll mode: touches never click.
+        } else if (!moved && dur <= cfg.tapTimeoutMs && !keyDuringTouch && cfg.tapToClick) {
+            if (clickOwed) {
+                actions.onClick();
+                actions.onClick();
+                lastTapUp = -1;
+            } else if (cfg.tapDrag) {
+                clickPending = true;
+                lastTapUp = now;
+                scheduler.post(pendingClick, cfg.doubleTapWindowMs);
+            } else {
+                actions.onClick();
             }
         } else if (clickOwed && !keyDuringTouch) {
             // Second touch after a tap was held too long without moving: still honour the first tap.

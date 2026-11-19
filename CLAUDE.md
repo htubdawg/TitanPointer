@@ -8,7 +8,8 @@ on-screen pointer. Status at v1.2: the user reports the no-root mode is "mostly 
   Don't ask them to build. Keep `dist/TitanPointer-<version>.apk` current and bump
   `versionCode`/`versionName` in `app/build.gradle` for each APK you send.
 - Listen to what they say they observed. They were right that a no-root app can read the keyboard touches.
-- Develop on branch `ccr-b45e6ac7-nxr23a`. Don't open a PR unless asked.
+- Develop on the branch the session names (v1.3–1.5 were on `ccr-40c55928-ihkbz5`). Don't open a PR unless asked.
+- Hardware facts live in `docs/titan-hardware.md`. Research the phone yourself (specs, photos) rather than asking the user to measure.
 
 - **Signing**: builds use `signing/titanpointer.keystore` (committed). Never change it, or the user has to
   uninstall to update. v1.2 used a lost key, so going from 1.2 to 1.3 needed an uninstall.
@@ -34,18 +35,21 @@ How the keyboard touches reach apps:
   strokes), and filters keys.
   - **No-root mode (default, `Prefs.MODE_NOROOT`)**: while pointer mode is on, adds a focusable 1×1
     invisible overlay ("catcher", FLAG_NOT_TOUCHABLE | FLAG_ALT_FOCUSABLE_IM) that gets the touchpad
-    MotionEvents and feeds `GestureEngine`. Its keys go to `onPointerModeKey`: Enter = click,
-    Alt+Enter = long press, Space = scroll lock, Backspace/Back = global Back; any other key turns
-    pointer mode off (that key press is lost); system/volume/media keys pass through.
+    MotionEvents and feeds `GestureEngine`. Its keys go to `onPointerModeKey`: click key (default Enter)
+    and long-press key (default Alt+Enter) are user-settable; Space = scroll mode; Back is re-sent as
+    global Back (the catcher would swallow it); letters do nothing by default (`Prefs.LETTERS` can make them
+    leave pointer mode); system/volume/media keys pass through. Any key-down cancels a pending tap.
   - Alt+Space toggles pointer mode by default (`Prefs.DEFAULT_TOGGLE_KEY/META`). It fires on key down.
   - **Root/ADB mode**: `PadLink` talks to the native helper `native/titanpad.c` (static arm64, shipped
     as `jniLibs/arm64-v8a/libtitanpad.so`, runs via `su -c ... stdio` or `serve <port> <token>` over
     ADB). It streams evdev events, optionally with EVIOCGRAB, through `TouchTracker` (MT protocol A/B)
     into `GestureEngine`. This lets you type while the pointer is on, but it's untested on hardware.
-- `GestureEngine`: pure Java, unit tested (`app/src/test/.../GestureEngineTest.java`). Move with
-  acceleration, tap = click (delayed for tap-then-drag), double tap, tap-then-drag, 2-finger scroll,
-  2-finger tap = long press, 3-finger tap = configurable action, scroll lock, suppression of touches
-  while typing.
+- `GestureEngine`: pure Java, unit tested (`app/src/test/.../GestureEngineTest.java`). **Single finger
+  only** (the pad can't see more; multi-finger gestures were removed in 1.5). Move with acceleration,
+  tap = click (delayed for tap-then-drag), double tap, tap-then-drag, scroll mode (taps never click,
+  needs `scrollSlop` travel before scrolling), touches starting in the top key row ignored
+  (`ignoreTopFrac`), suppression while typing. `PointerService` keeps the injected scroll finger down
+  300 ms between swipes so quick swipes don't look like a double tap (that zoomed apps).
 - `MainActivity`: setup/settings screen built in code. `ProbeActivity`: no-root input probe that
   logs every input path and device. `PointerTileService`: Quick Settings tile. `Prefs`: settings keys.
 
@@ -70,13 +74,12 @@ crashed and doesn't rebind it until re-toggled. `PointerService` now calls start
 channel, type specialUse) so task removal doesn't kill the process. Don't move activities to another
 process: prefs listeners, `PointerService.isRunning()` and `PadLink` assume one process.
 
+## v1.5
+Speed 0.1–2.0× (default 0.7), multi-finger gestures removed, scroll fixes, top-row ignore zone (22%,
+estimated from a photo: unconfirmed), letters setting, settable click/long-press keys, Backspace no longer = Back.
+
 ## Open items / ideas
-- Ask the user what "mostly working" leaves out, and tune from there (speed, acceleration, tap
-  sensitivity, scroll speed).
-- No-root mode: typing needs leaving pointer mode, and the key that leaves it is lost. Possible fix:
-  re-type that key into the focused field with accessibility ACTION_SET_TEXT, or keep pointer mode
-  but pass keys through some other way.
+- Confirm the 22% top-row cut-off and raw Y direction on the phone.
 - The catcher may lose focus to other overlays or dialogs. There's no recovery logic yet.
-- Multitouch over the no-root path is unconfirmed (only one pointer seen).
 - Root/ADB path: confirm `/dev/input` names/ranges on a real Titan and test the grab behavior.
 - The test page artifact (Titan Keyboard Probe): https://claude.ai/artifact/3YTvp88ubTZ1kfVoHWsXP3

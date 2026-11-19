@@ -22,8 +22,6 @@ public class GestureEngineTest {
         engine = new GestureEngine(new GestureEngine.Actions() {
             @Override public void onPointerMove(float dx, float dy) { moveX += dx; moveY += dy; if (!log.contains("move")) log.add("move"); }
             @Override public void onClick() { log.add("click"); }
-            @Override public void onSecondaryClick() { log.add("secondary"); }
-            @Override public void onTertiaryTap() { log.add("tertiary"); }
             @Override public void onScrollBegin() { log.add("scrollBegin"); }
             @Override public void onScroll(float dx, float dy) { scrollX += dx; scrollY += dy; }
             @Override public void onScrollEnd() { log.add("scrollEnd"); }
@@ -111,28 +109,43 @@ public class GestureEngineTest {
     }
 
     @Test
-    public void twoFingerScroll() {
-        frame(0, 1, 400, 100, 1, 2, 600, 100);
-        for (int i = 1; i <= 5; i++) { advance(10); frame(0, 1, 400, 100 + i * 20, 1, 2, 600, 100 + i * 20); }
-        advance(10); frame(0, -1, 0, 0, 1, -1, 0, 0);
+    public void secondFingerIsIgnored() {
+        frame(0, 1, 400, 200, 1, 2, 600, 200);
+        for (int i = 1; i <= 5; i++) { advance(10); frame(0, 1, 400 + i * 20, 200, 1, 2, 600, 200 + i * 40); }
+        assertEquals(100f, moveX, 0.5f);
+        assertEquals(0f, moveY, 0.01f);
+    }
+
+    @Test
+    public void touchStartingInTopRowIsIgnored() {
+        engine.getConfig().ignoreTopFrac = 0.2f; // y < 80 of 0..400
+        engine.getConfig().tapDrag = false;
+        frame(0, 1, 500, 40);
+        advance(60); frame(0, -1, 0, 0);
+        frame(0, 2, 500, 40);
+        for (int i = 1; i <= 5; i++) { advance(10); frame(0, 2, 500 + i * 20, 40 + i * 20); }
+        advance(10); frame(0, -1, 0, 0);
         advance(1000);
-        assertEquals(List.of("scrollBegin", "scrollEnd"), log);
-        assertTrue(scrollY > 50);
-        assertEquals(0f, moveX, 0.01f);
+        assertTrue(log.isEmpty());
     }
 
     @Test
-    public void twoFingerTapIsSecondary() {
-        frame(0, 1, 400, 100, 1, 2, 600, 100);
-        advance(60); frame(0, -1, 0, 0, 1, -1, 0, 0);
-        assertEquals(List.of("secondary"), log);
+    public void touchInTopRowCancelsPendingClick() {
+        engine.getConfig().ignoreTopFrac = 0.2f;
+        frame(0, 1, 500, 200);
+        advance(60); frame(0, -1, 0, 0); // tap: click pending
+        advance(50); frame(0, 2, 500, 40); // then the finger lands on Back
+        advance(60); frame(0, -1, 0, 0);
+        advance(1000);
+        assertTrue(log.isEmpty());
     }
 
     @Test
-    public void threeFingerTap() {
-        frame(0, 1, 300, 100, 1, 2, 500, 100, 2, 3, 700, 100);
-        advance(60); frame(0, -1, 0, 0, 1, -1, 0, 0, 2, -1, 0, 0);
-        assertEquals(List.of("tertiary"), log);
+    public void slidingIntoTopRowKeepsMoving() {
+        engine.getConfig().ignoreTopFrac = 0.2f;
+        frame(0, 1, 500, 200);
+        for (int i = 1; i <= 5; i++) { advance(10); frame(0, 1, 500, 200 - i * 35); }
+        assertTrue(moveY < -100);
     }
 
     @Test
@@ -210,8 +223,30 @@ public class GestureEngineTest {
         advance(10); frame(0, -1, 0, 0);
         advance(1000);
         assertEquals(List.of("scrollBegin", "scrollEnd"), log);
-        assertTrue(scrollY > 50);
+        assertTrue(scrollY > 20);
         assertEquals(0f, moveY, 0.01f);
+    }
+
+    @Test
+    public void scrollModeTapsNeverClick() {
+        engine.setScrollLock(true);
+        frame(0, 1, 500, 200);
+        advance(60); frame(0, -1, 0, 0);
+        advance(50); frame(0, 2, 500, 200);
+        advance(60); frame(0, -1, 0, 0);
+        advance(1000);
+        assertTrue(log.isEmpty());
+    }
+
+    @Test
+    public void scrollNeedsAClearSlide() {
+        engine.setScrollLock(true);
+        frame(0, 1, 500, 200);
+        for (int i = 1; i <= 5; i++) { advance(10); frame(0, 1, 500, 200 + i * 10); } // 50 of 1000 < 6%
+        advance(10); frame(0, -1, 0, 0);
+        advance(1000);
+        assertTrue(log.isEmpty());
+        assertEquals(0f, scrollY, 0.01f);
     }
 
     @Test

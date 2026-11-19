@@ -42,7 +42,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     private LinearLayout root;
     private float dp;
 
-    private TextView accessibilityStatus, linkStatus, deviceText, adbCommand, toggleKeyText;
+    private TextView accessibilityStatus, linkStatus, deviceText, adbCommand;
     private Button accessibilityButton;
     private Switch enabledSwitch, grabSwitch, zoneSwitch;
     private View adbBox;
@@ -99,7 +99,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         accessibilityButton = button("Open Accessibility settings", v ->
                 startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         enabledSwitch = switchPref(Prefs.ENABLED, "Pointer mode", true);
-        hint("Toggle with Alt + Space (change it under Toggle shortcut), or the Quick Settings tile “Keyboard pointer”.");
+        hint("Toggle with Alt + Space (change it under Keys), or the Quick Settings tile “Keyboard pointer”.");
 
         // --- Connection
         section("2. How to read the keyboard");
@@ -132,14 +132,14 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         noRootBox.setOrientation(LinearLayout.VERTICAL);
         outer.addView(noRootBox);
         root = noRootBox;
-        hint("The Titan reports keyboard touches to the app that has keyboard focus, so while pointer mode is on, "
-                + "TitanPointer holds the focus and the keys get pointer jobs:");
+        hint("The Titan reports keyboard touches only to the app that has keyboard focus, so while pointer mode "
+                + "is on, TitanPointer holds the focus. Keys can't reach the app underneath until you turn it off.");
         text("• Slide: move the pointer · Tap: click\n"
-                + "• Enter: click · Alt + Enter: long press\n"
-                + "• Space: scroll lock on/off (slides scroll instead of moving)\n"
-                + "• Backspace or Back: go back\n"
-                + "• Any letter: leave pointer mode and type (that key press is used up)\n"
+                + "• Enter: click · Alt + Enter: long press (change under Keys)\n"
+                + "• Space: scroll mode on/off\n"
                 + "• Alt + Space: pointer mode on/off");
+        spinnerPref(Prefs.LETTERS, "Letter keys in pointer mode", new String[] {Prefs.LETTERS_NOTHING, Prefs.LETTERS_EXIT},
+                new String[] {"Do nothing", "Turn pointer mode off"}, Prefs.LETTERS_NOTHING);
         button("Open keyboard input probe", v -> startActivity(new Intent(this, ProbeActivity.class)));
         root = outer;
 
@@ -218,7 +218,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
         // --- Pointer
         section("Pointer");
-        seekPref(Prefs.SENS, "Speed", 2, 80, 20, v -> String.format(Locale.US, "%.1f×", v / 10f));
+        seekPref(Prefs.SENS, "Speed", Prefs.SENS_MIN, Prefs.SENS_MAX, Prefs.SENS_DEFAULT, v -> String.format(Locale.US, "%.1f×", v / 10f));
         seekPref(Prefs.ACCEL, "Acceleration", 0, 40, 10, v -> String.format(Locale.US, "%.1f", v / 10f));
         seekPref(Prefs.YSPEED, "Vertical speed", 3, 40, 10, v -> String.format(Locale.US, "%.1f×", v / 10f));
         seekPref(Prefs.CURSOR_SIZE, "Pointer size", 6, 30, 10, v -> String.format(Locale.US, "%.1f×", v / 10f));
@@ -229,42 +229,33 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         switchPref(Prefs.TAP, "Tap to click", true);
         switchPref(Prefs.TAP_DRAG, "Tap, then touch and move to drag (adds a short click delay)", true);
         seekPref(Prefs.TYPING_MS, "Ignore touches after a key press", 0, 1000, 350, v -> v + " ms");
-        spinnerPref(Prefs.THREE_FINGER, "Three-finger tap", new String[] {"back", "home", "recents", "notifications", "none"},
-                new String[] {"Back", "Home", "Recent apps", "Notifications", "Nothing"}, "back");
+        seekPref(Prefs.IGNORE_TOP, "Ignore touches that start in the top key row", 0, 40, Prefs.DEFAULT_IGNORE_TOP,
+                v -> v == 0 ? "off" : v + "% of the keyboard");
+        hint("The top row (Shift, Recents, the home key, Back, Alt) is part of the touch surface. Touches that "
+                + "start there don't move the pointer or click; a slide that starts lower can still run into it.");
 
         // --- Scrolling
-        section("Scrolling (two fingers)");
+        section("Scrolling (Space turns scroll mode on/off)");
+        hint("In scroll mode, slides scroll and taps never click.");
         seekPref(Prefs.SCROLL, "Scroll speed", 2, 60, 15, v -> String.format(Locale.US, "%.1f×", v / 10f));
         switchPref(Prefs.INV_SCROLL, "Reverse scroll direction", false);
 
-        // --- Shortcut
-        section("Toggle shortcut");
-        toggleKeyText = text("");
-        LinearLayout r2 = new LinearLayout(this);
-        Button set = new Button(this);
-        set.setText("Set key");
-        set.setOnClickListener(v -> captureToggleKey());
-        Button clear = new Button(this);
-        clear.setText("Clear");
-        clear.setOnClickListener(v -> {
-            prefs.edit().putInt(Prefs.TOGGLE_KEY, 0).putInt(Prefs.TOGGLE_META, 0).apply();
-            refresh();
-        });
-        r2.addView(set);
-        r2.addView(clear);
-        root.addView(r2);
-        hint("The key is swallowed while it toggles pointer mode, so pick one you don't type with "
-                + "(or a combination such as Alt + a letter).");
+        // --- Keys
+        section("Keys");
+        keyBinding("Pointer mode on/off", Prefs.TOGGLE_KEY, Prefs.DEFAULT_TOGGLE_KEY, Prefs.TOGGLE_META, Prefs.DEFAULT_TOGGLE_META);
+        hint("Works everywhere. The key is swallowed while it toggles pointer mode, so pick a combination "
+                + "you don't type with.");
+        keyBinding("Click", Prefs.CLICK_KEY, Prefs.DEFAULT_CLICK_KEY, Prefs.CLICK_META, Prefs.DEFAULT_CLICK_META);
+        keyBinding("Long press", Prefs.LONG_KEY, Prefs.DEFAULT_LONG_KEY, Prefs.LONG_META, Prefs.DEFAULT_LONG_META);
+        hint("Click and long press act at the pointer while pointer mode is on.");
 
         // --- Gestures
         section("Gestures");
-        text("• One finger: move the pointer\n"
+        text("• Slide: move the pointer\n"
                 + "• Tap: click (tap)\n"
                 + "• Tap twice: double tap\n"
                 + "• Tap, then touch again and move: drag\n"
-                + "• Two fingers: scroll (lift while moving to fling)\n"
-                + "• Two-finger tap: long press\n"
-                + "• Three-finger tap: Back (configurable)\n"
+                + "• Space, then slide: scroll\n"
                 + "• Typing is ignored automatically");
     }
 
@@ -285,17 +276,61 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         refresh();
     }
 
-    private void captureToggleKey() {
+    private final List<Runnable> keyLabels = new ArrayList<>();
+
+    /** A row showing a key binding, with Set and Clear buttons. */
+    private void keyBinding(final String label, final String keyPref, final int defKey, final String metaPref,
+            final int defMeta) {
+        final TextView t = text("");
+        Runnable update = () -> t.setText(label + ": " + describeKey(prefs.getInt(keyPref, defKey),
+                prefs.getInt(metaPref, defMeta)));
+        keyLabels.add(update);
+        update.run();
+        LinearLayout r = new LinearLayout(this);
+        Button set = new Button(this);
+        set.setText("Set");
+        set.setOnClickListener(v -> captureKey(label, keyPref, metaPref));
+        Button clear = new Button(this);
+        clear.setText("Clear");
+        clear.setOnClickListener(v -> {
+            prefs.edit().putInt(keyPref, 0).putInt(metaPref, 0).apply();
+            refresh();
+        });
+        Button reset = new Button(this);
+        reset.setText("Default");
+        reset.setOnClickListener(v -> {
+            prefs.edit().putInt(keyPref, defKey).putInt(metaPref, defMeta).apply();
+            refresh();
+        });
+        r.addView(set);
+        r.addView(clear);
+        r.addView(reset);
+        root.addView(r);
+    }
+
+    private static String describeKey(int key, int m) {
+        if (key == 0) return "none";
+        StringBuilder sb = new StringBuilder();
+        if ((m & KeyEvent.META_CTRL_ON) != 0) sb.append("Ctrl + ");
+        if ((m & KeyEvent.META_ALT_ON) != 0) sb.append("Alt + ");
+        if ((m & KeyEvent.META_SHIFT_ON) != 0) sb.append("Shift + ");
+        if ((m & KeyEvent.META_SYM_ON) != 0) sb.append("Sym + ");
+        String name = KeyEvent.keyCodeToString(key).replace("KEYCODE_", "").replace('_', ' ');
+        sb.append(name.charAt(0)).append(name.substring(1).toLowerCase(Locale.US));
+        return sb.toString();
+    }
+
+    private void captureKey(String label, final String keyPref, final String metaPref) {
         AlertDialog d = new AlertDialog.Builder(this)
-                .setTitle("Toggle shortcut")
-                .setMessage("Press the key to use (hold Alt, Shift or Sym too if you want a combination).")
+                .setTitle(label)
+                .setMessage("Press the key to use. Hold Alt, Shift or Sym too for a combination.")
                 .setNegativeButton(android.R.string.cancel, null)
                 .create();
         d.setOnKeyListener((di, code, ev) -> {
             if (KeyEvent.isModifierKey(code) || code == KeyEvent.KEYCODE_BACK) return false;
             if (ev.getAction() != KeyEvent.ACTION_UP) return true;
-            prefs.edit().putInt(Prefs.TOGGLE_KEY, code)
-                    .putInt(Prefs.TOGGLE_META, PointerService.normalizeMeta(ev.getMetaState())).apply();
+            prefs.edit().putInt(keyPref, code)
+                    .putInt(metaPref, PointerService.normalizeMeta(ev.getMetaState())).apply();
             di.dismiss();
             refresh();
             return true;
@@ -325,19 +360,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         testPad.setZone(prefs.getBoolean(Prefs.ZONE_ON, false) ? new int[] {prefs.getInt(Prefs.ZONE_XMIN, 0),
                 prefs.getInt(Prefs.ZONE_XMAX, 0), prefs.getInt(Prefs.ZONE_YMIN, 0), prefs.getInt(Prefs.ZONE_YMAX, 0)} : null);
 
-        int key = prefs.getInt(Prefs.TOGGLE_KEY, Prefs.DEFAULT_TOGGLE_KEY);
-        if (key == 0) {
-            toggleKeyText.setText("No shortcut set");
-        } else {
-            int m = prefs.getInt(Prefs.TOGGLE_META, Prefs.DEFAULT_TOGGLE_META);
-            StringBuilder sb = new StringBuilder("Shortcut: ");
-            if ((m & KeyEvent.META_CTRL_ON) != 0) sb.append("Ctrl + ");
-            if ((m & KeyEvent.META_ALT_ON) != 0) sb.append("Alt + ");
-            if ((m & KeyEvent.META_SHIFT_ON) != 0) sb.append("Shift + ");
-            if ((m & KeyEvent.META_SYM_ON) != 0) sb.append("Sym + ");
-            sb.append(KeyEvent.keyCodeToString(key).replace("KEYCODE_", ""));
-            toggleKeyText.setText(sb);
-        }
+        for (Runnable r : keyLabels) r.run();
     }
 
     private String adbCommandText() {
@@ -491,7 +514,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         root.addView(t);
         SeekBar sb = new SeekBar(this);
         sb.setMax(max - min);
-        int cur = prefs.getInt(key, def);
+        int cur = Math.max(min, Math.min(max, prefs.getInt(key, def)));
         sb.setProgress(cur - min);
         t.setText(label + ": " + fmt.f(cur));
         sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {

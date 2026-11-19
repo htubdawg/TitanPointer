@@ -3,15 +3,16 @@
 Turns the touch-sensitive physical keyboard of the original **Unihertz Titan** into a laptop-style
 touchpad with an on-screen mouse pointer.
 
-| Gesture on the keyboard | Result |
+| On the keyboard | Result |
 |---|---|
-| Slide one finger | Move the pointer (with acceleration) |
+| Slide | Move the pointer (with acceleration) |
 | Tap | Click (tap at the pointer) |
 | Tap twice | Double tap |
 | Tap, then touch again and slide | Drag (press and hold at the pointer and move) |
-| Slide two fingers | Scroll (lift while moving to fling) |
-| Two-finger tap | Long press |
-| Three-finger tap | Back (or Home, Recents, Notifications, nothing) |
+| Space, then slide | Scroll mode: slides scroll, taps never click |
+
+The Titan's keyboard reports one finger at a time. Touches that start on the top key row (Shift, Recents,
+home, Back, Alt) are ignored. See [docs/titan-hardware.md](docs/titan-hardware.md).
 
 Typing is detected automatically: touches during and just after a key press don't move the pointer or click.
 
@@ -37,13 +38,14 @@ so the keys get pointer jobs:
 
 | Key | Action |
 |---|---|
-| Enter | Click · Alt + Enter: long press |
-| Space | Scroll lock on/off (slides scroll instead of moving the pointer) |
-| Backspace / Back | Back |
-| Any letter | Leave pointer mode and type (that key press is used up) |
+| Enter | Click (changeable) |
+| Alt + Enter | Long press (changeable) |
+| Space | Scroll mode on/off |
+| Back | Back, as usual |
+| Letters | Nothing by default (setting: turn pointer mode off) |
 | Alt + Space | Pointer mode on/off (changeable) |
 
-Only one finger is reported this way, so use Space for scrolling. Root or ADB mode reads the sensor directly
+Root or ADB mode reads the sensor directly
 and lets you type while the pointer is on.
 
 ### Root or ADB mode

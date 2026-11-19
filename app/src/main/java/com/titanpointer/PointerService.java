@@ -205,6 +205,8 @@ public final class PointerService extends AccessibilityService
         link.setGrab(false);
         link.setOpen(OWNER, false);
         main.removeCallbacks(autoHide);
+        main.removeCallbacks(liftScroll);
+        scrollHeld = false;
         if (cursor != null) cursor.setState(CursorView.STATE_NORMAL);
         setCursorVisible(false);
         removeCursorWindow(); // no window at all while pointer mode is off
@@ -315,35 +317,36 @@ public final class PointerService extends AccessibilityService
         int k = event.getKeyCode();
         boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
         if (KeyEvent.isModifierKey(k)) return false; // let Alt/Shift/Sym through for combinations
+        // Long press first: with the defaults it's the click key plus Alt.
+        if (matches(event, Prefs.LONG_KEY, Prefs.DEFAULT_LONG_KEY, Prefs.LONG_META, Prefs.DEFAULT_LONG_META)) {
+            if (down && event.getRepeatCount() == 0) onLongPress();
+            return true;
+        }
+        if (matches(event, Prefs.CLICK_KEY, Prefs.DEFAULT_CLICK_KEY, Prefs.CLICK_META, Prefs.DEFAULT_CLICK_META)) {
+            if (down && event.getRepeatCount() == 0) onClick();
+            return true;
+        }
         switch (k) {
-            case KeyEvent.KEYCODE_ENTER:
-            case KeyEvent.KEYCODE_DPAD_CENTER:
-                engine.onKeyActivity(); // the key press itself also touched the pad
-                if (down && event.getRepeatCount() == 0) {
-                    if (event.isAltPressed()) onSecondaryClick();
-                    else onClick();
-                }
-                return true;
             case KeyEvent.KEYCODE_SPACE:
-                engine.onKeyActivity();
                 if (down && event.getRepeatCount() == 0) {
                     boolean on = !engine.isScrollLock();
                     engine.setScrollLock(on);
+                    if (!on && scrollHeld) liftScroll.run();
+                    main.removeCallbacks(liftScroll);
                     cursor.setState(on ? CursorView.STATE_SCROLL : CursorView.STATE_NORMAL);
                     setCursorVisible(true);
                 }
                 return true;
             case KeyEvent.KEYCODE_BACK:
-            case KeyEvent.KEYCODE_ESCAPE:
-                if (!down) performGlobalAction(GLOBAL_ACTION_BACK);
-                return true;
-            case KeyEvent.KEYCODE_DEL:
+                // Our focus window would swallow the keyboard's Back key, so pass it on as a normal Back.
                 if (!down) performGlobalAction(GLOBAL_ACTION_BACK);
                 return true;
             default:
                 if (isSystemKey(k)) return false;
-                // Any other key means "I want to type": leave pointer mode. This key press is used up.
-                if (down) {
+                // Other keys can't reach the app underneath. By default they do nothing; optionally
+                // a key press leaves pointer mode (that key press is used up).
+                if (down && event.getRepeatCount() == 0
+                        && Prefs.LETTERS_EXIT.equals(prefs.getString(Prefs.LETTERS, Prefs.LETTERS_NOTHING))) {
                     setPointerMode(false);
                     Toast.makeText(this, R.string.typing_mode, Toast.LENGTH_SHORT).show();
                 }
@@ -433,11 +436,23 @@ public final class PointerService extends AccessibilityService
                 return true;
             }
         }
+        if (active && event.getAction() == KeyEvent.ACTION_DOWN) {
+            // Every key (Back, Recents, Shift, Alt, letters) sits on the touch surface: the touch that
+            // came just before this press must not click or move.
+            engine.onKeyActivity();
+        }
         if (active && usingCatcher) return onPointerModeKey(event);
         if (active && event.getAction() == KeyEvent.ACTION_DOWN && !isNavKey(event.getKeyCode())) {
             engine.onKeyActivity();
         }
         return false;
+    }
+
+    /** True if the event is the key + modifiers saved under the given preferences. */
+    private boolean matches(KeyEvent e, String keyPref, int defKey, String metaPref, int defMeta) {
+        int key = prefs.getInt(keyPref, defKey);
+        if (key == 0 || e.getKeyCode() != key) return false;
+        return normalizeMeta(e.getMetaState()) == normalizeMeta(prefs.getInt(metaPref, defMeta));
     }
 
     static int normalizeMeta(int m) {
@@ -483,8 +498,7 @@ public final class PointerService extends AccessibilityService
         injector.tap(px, py);
     }
 
-    @Override
-    public void onSecondaryClick() {
+    private void onLongPress() {
         if (!active) return;
         setCursorVisible(true);
         flash();
@@ -492,35 +506,29 @@ public final class PointerService extends AccessibilityService
     }
 
     @Override
-    public void onTertiaryTap() {
-        if (!active) return;
-        switch (prefs.getString(Prefs.THREE_FINGER, "back")) {
-            case "back":
-                performGlobalAction(GLOBAL_ACTION_BACK);
-                break;
-            case "home":
-                performGlobalAction(GLOBAL_ACTION_HOME);
-                break;
-            case "recents":
-                performGlobalAction(GLOBAL_ACTION_RECENTS);
-                break;
-            case "notifications":
-                performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS);
-                break;
-            default:
-                break;
-        }
-    }
-
-    @Override
     public void onScrollBegin() {
         if (!active) return;
         setCursorVisible(true);
         cursor.setState(CursorView.STATE_SCROLL);
+        if (scrollHeld) {
+            // A new swipe soon after the last one: keep the same injected finger down. Lifting and
+            // pressing again in quick succession looks like a double tap and zooms many apps.
+            main.removeCallbacks(liftScroll);
+            scrollHeld = false;
+            if (injector.isStreaming()) return;
+        }
         scrollX = px;
         scrollY = py;
         injector.beginStream(scrollX, scrollY);
     }
+
+    /** After a swipe ends, the injected finger stays down this long in case another swipe follows. */
+    private static final long SCROLL_HOLD_MS = 300;
+    private boolean scrollHeld = false;
+    private final Runnable liftScroll = () -> {
+        scrollHeld = false;
+        injector.endStream();
+    };
 
     @Override
     public void onScroll(float dx, float dy) {
@@ -539,8 +547,16 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onScrollEnd() {
-        injector.endStream();
-        cursor.setState(CursorView.STATE_NORMAL);
+        if (cursor != null) cursor.setState(engine.isScrollLock() ? CursorView.STATE_SCROLL : CursorView.STATE_NORMAL);
+        if (!active || !engine.isScrollLock()) {
+            main.removeCallbacks(liftScroll);
+            scrollHeld = false;
+            injector.endStream();
+            return;
+        }
+        scrollHeld = true;
+        main.removeCallbacks(liftScroll);
+        main.postDelayed(liftScroll, SCROLL_HOLD_MS);
     }
 
     @Override

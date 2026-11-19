@@ -20,7 +20,19 @@ public final class Prefs {
     public static final String SWAP = "swap", INV_X = "inv_x", INV_Y = "inv_y";
     public static final String SENS = "sens", ACCEL = "accel", YSPEED = "yspeed", SCROLL = "scroll", INV_SCROLL = "inv_scroll";
     public static final String TAP = "tap", TAP_DRAG = "tap_drag", TYPING_MS = "typing_ms";
-    public static final String THREE_FINGER = "three_finger"; // back, home, recents, none
+    /** Touches starting in this top part of the pad (percent of its height) are ignored: the key row with Back/Recents. */
+    public static final String IGNORE_TOP = "ignore_top";
+    /**
+     * Default cut-off, measured from a front photo of the Titan (153.6 x 92.5 mm): the keyboard spans
+     * about 33 mm top to bottom and the top row (Shift, Recents, home, Back, Alt) about the first 7 mm.
+     * See docs/titan-hardware.md.
+     */
+    public static final int DEFAULT_IGNORE_TOP = 22;
+    /** What letter keys do while pointer mode is on (no-root mode). */
+    public static final String LETTERS = "letters";
+    public static final String LETTERS_NOTHING = "nothing", LETTERS_EXIT = "exit";
+    /** Speed slider: 0.1x to 2.0x. */
+    public static final int SENS_MIN = 1, SENS_MAX = 20, SENS_DEFAULT = 7;
     public static final String AUTOHIDE_S = "autohide_s";
     public static final String CURSOR_SIZE = "cursor_size";
     public static final String ENABLED = "enabled"; // pointer mode on/off
@@ -28,6 +40,12 @@ public final class Prefs {
     /** Alt + Space toggles pointer mode unless the user picks something else. */
     public static final int DEFAULT_TOGGLE_KEY = android.view.KeyEvent.KEYCODE_SPACE;
     public static final int DEFAULT_TOGGLE_META = android.view.KeyEvent.META_ALT_ON;
+    /** Keys that click / long-press at the pointer while pointer mode is on (no-root mode). 0 = none. */
+    public static final String CLICK_KEY = "click_key", CLICK_META = "click_meta";
+    public static final String LONG_KEY = "long_key", LONG_META = "long_meta";
+    public static final int DEFAULT_CLICK_KEY = android.view.KeyEvent.KEYCODE_ENTER, DEFAULT_CLICK_META = 0;
+    public static final int DEFAULT_LONG_KEY = android.view.KeyEvent.KEYCODE_ENTER;
+    public static final int DEFAULT_LONG_META = android.view.KeyEvent.META_ALT_ON;
     public static final String ADB_PORT = "adb_port", ADB_TOKEN = "adb_token";
 
     private Prefs() {}
@@ -69,7 +87,8 @@ public final class Prefs {
         g.invertX = p.getBoolean(INV_X, false);
         g.invertY = p.getBoolean(INV_Y, false);
         g.screenWidthPx = screenWidthPx;
-        g.sensitivity = p.getInt(SENS, 20) / 10f;
+        g.sensitivity = Math.max(SENS_MIN, Math.min(SENS_MAX, p.getInt(SENS, SENS_DEFAULT))) / 10f;
+        g.ignoreTopFrac = p.getInt(IGNORE_TOP, DEFAULT_IGNORE_TOP) / 100f;
         g.acceleration = p.getInt(ACCEL, 10) / 10f;
         g.ySpeed = p.getInt(YSPEED, 10) / 10f;
         g.scrollSpeed = p.getInt(SCROLL, 15) / 10f;
