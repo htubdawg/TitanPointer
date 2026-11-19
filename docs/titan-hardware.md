@@ -38,7 +38,11 @@ direction settings move the pointer the right way on the user's phone, which fit
 - `mtk-tpd`: touchscreen, X -1..1434, Y 0..1435.
 - `aw9523-key`, `mtk-kpd`, `cf-keys`: keys.
 
-## Key codes (unconfirmed)
+## Key codes
+Measured (v1.6 diagnostics log): the home/fingerprint key sends KEYCODE_HOME from `cf-keys`; Shift and
+Space send KEYCODE_SHIFT_LEFT / KEYCODE_SPACE from `aw9523-key`.
+
+Unconfirmed:
 Expected Android key codes: Back = KEYCODE_BACK, Recents = KEYCODE_APP_SWITCH, Shift = KEYCODE_SHIFT_LEFT,
 Alt = KEYCODE_ALT_LEFT, Enter = KEYCODE_ENTER, Backspace = KEYCODE_DEL. The home/fingerprint key has not been
 checked. The probe screen in the app logs real key codes.
@@ -50,5 +54,9 @@ checked. The probe screen in the app logs real key codes.
   SOURCE_CLASS_POSITION) through the IME stage of the focused window if that window can use an input
   method. So in a text field, the BlackBerry Keyboard gets the swipes first.
 - TitanPointer's focus window has FLAG_ALT_FOCUSABLE_IM, so it isn't an input-method target and should get
-  the swipes itself, *while it has focus*. v1.6 logs focus changes (Diagnostics in the app) to find out
-  what happens in apps where the pointer stops working (reported: a notes app).
+  the swipes itself, *while it has focus*.
+- **Measured (v1.6 log):** in the notes app with the BlackBerry Keyboard up, our focus window *had* focus
+  but received **no** touchpad events; in the launcher it received them. So while the keyboard app is
+  active, the touches go to it regardless of window focus. v1.7 hides the keyboard app
+  (SoftKeyboardController SHOW_MODE_HIDDEN) and clears the text field's focus while pointer mode is on,
+  restoring both when it goes off.

@@ -85,8 +85,13 @@ of the app: focus gained/lost, windows, keys + source device, non-touchpad motio
 recovery: when the focus window loses focus it re-adds itself (max 3 tries per 10 s, not on the lock
 screen) and the cursor fades while unfocused. Ask the user for the copied log from the notes app.
 
+## v1.7
+The v1.6 log showed the cause: with the BlackBerry Keyboard up, the focus window keeps focus but gets no
+touchpad events. Pointer mode now hides the keyboard app (SHOW_MODE_HIDDEN) and clears the focused text
+field (needs canRetrieveWindowContent, added to the service config); both are undone when it goes off
+(focus is put back only if no other field took it). Logged in Diag. Not yet confirmed on the phone.
+
 ## Open items / ideas
 - Confirm the 22% top-row cut-off and raw Y direction on the phone.
-- The catcher may lose focus to other overlays or dialogs. There's no recovery logic yet.
 - Root/ADB path: confirm `/dev/input` names/ranges on a real Titan and test the grab behavior.
 - The test page artifact (Titan Keyboard Probe): https://claude.ai/artifact/3YTvp88ubTZ1kfVoHWsXP3

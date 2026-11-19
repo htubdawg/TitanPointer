@@ -195,6 +195,7 @@ public final class PointerService extends AccessibilityService
         injector.setEnabled(true);
         addCursorWindow();
         if (isNoRoot(prefs)) {
+            pushImeAway();
             addCatcher();
         } else {
             link.setGrab(prefs.getBoolean(Prefs.GRAB, false));
@@ -213,6 +214,7 @@ public final class PointerService extends AccessibilityService
         // Drop queued taps and lift any injected finger; nothing new is injected until reactivated.
         injector.setEnabled(false);
         removeCatcher();
+        restoreIme();
         link.setGrab(false);
         link.setOpen(OWNER, false);
         main.removeCallbacks(autoHide);
@@ -295,6 +297,58 @@ public final class PointerService extends AccessibilityService
             catcher = null;
             Diag.log("focus window could not be added: " + e);
             Toast.makeText(this, "TitanPointer could not take keyboard focus", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    // ---- Keyboard app (input method) ----
+
+    /** The text field we took focus from when pointer mode came on; focused again when it goes off. */
+    private android.view.accessibility.AccessibilityNodeInfo clearedField;
+
+    /**
+     * While a keyboard app (e.g. BlackBerry Keyboard) is up for a text field, the Titan sends keyboard
+     * touches to it instead of to our focus window (seen in the diagnostics log). Hide it and take focus
+     * off the text field while pointer mode is on.
+     */
+    private void pushImeAway() {
+        try {
+            boolean ok = getSoftKeyboardController().setShowMode(SHOW_MODE_HIDDEN);
+            Diag.log("keyboard app hidden for pointer mode: " + (ok ? "ok" : "refused"));
+        } catch (RuntimeException e) {
+            Diag.log("hiding keyboard app failed: " + e);
+        }
+        clearedField = null;
+        try {
+            android.view.accessibility.AccessibilityNodeInfo f =
+                    findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT);
+            if (f != null && f.isEditable()) {
+                boolean ok = f.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLEAR_FOCUS);
+                Diag.log("text field focus cleared (" + f.getPackageName() + "): " + (ok ? "ok" : "refused"));
+                if (ok) clearedField = f;
+            } else {
+                Diag.log("no text field focused" + (f == null ? "" : " (focus: " + f.getClassName() + ")"));
+            }
+        } catch (RuntimeException e) {
+            Diag.log("clearing text field focus failed: " + e);
+        }
+    }
+
+    private void restoreIme() {
+        try {
+            getSoftKeyboardController().setShowMode(SHOW_MODE_AUTO);
+        } catch (RuntimeException ignored) {
+        }
+        android.view.accessibility.AccessibilityNodeInfo f = clearedField;
+        clearedField = null;
+        if (f == null) return;
+        try {
+            android.view.accessibility.AccessibilityNodeInfo now =
+                    findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT);
+            if (now != null && now.isEditable()) return; // you clicked into a field meanwhile: leave it
+            boolean ok = f.refresh() && f.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_FOCUS);
+            Diag.log("text field focus restored: " + (ok ? "ok" : "failed"));
+        } catch (RuntimeException e) {
+            Diag.log("restoring text field focus failed: " + e);
         }
     }
 
@@ -491,6 +545,7 @@ public final class PointerService extends AccessibilityService
     protected boolean onKeyEvent(KeyEvent event) {
         if (active && event.getAction() == KeyEvent.ACTION_DOWN) {
             Diag.logEvery("key" + event.getKeyCode(), 1000, "key " + KeyEvent.keyCodeToString(event.getKeyCode())
+                    + " meta=0x" + Integer.toHexString(event.getMetaState())
                     + " from " + deviceName(event.getDevice()) + (usingCatcher && !catcherFocused ? " (no focus)" : ""));
         }
         int toggleKey = prefs.getInt(Prefs.TOGGLE_KEY, Prefs.DEFAULT_TOGGLE_KEY);
