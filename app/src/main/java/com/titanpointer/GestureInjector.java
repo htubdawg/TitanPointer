@@ -31,6 +31,8 @@ public final class GestureInjector {
     private long lastSegmentAt;
     /** Discrete gestures that arrive while a stream is finishing. */
     private final ArrayDeque<Runnable> queue = new ArrayDeque<>();
+    /** While false, nothing new is injected (pointer mode is off). */
+    private boolean enabled = true;
 
     public GestureInjector(AccessibilityService svc) {
         this.svc = svc;
@@ -39,6 +41,15 @@ public final class GestureInjector {
     public void setScreenSize(int w, int h) {
         screenW = w;
         screenH = h;
+    }
+
+    /** Turning off drops queued taps and lifts any injected finger; later gestures are ignored. */
+    public void setEnabled(boolean on) {
+        enabled = on;
+        if (!on) {
+            queue.clear();
+            endStream();
+        }
     }
 
     public boolean isStreaming() {
@@ -54,6 +65,7 @@ public final class GestureInjector {
     }
 
     private void discrete(final float x, final float y, final long duration) {
+        if (!enabled) return;
         if (streaming || inFlight) {
             queue.add(() -> discrete(x, y, duration));
             return;
@@ -73,6 +85,7 @@ public final class GestureInjector {
 
     /** Put a finger down at (x, y). */
     public void beginStream(float x, float y) {
+        if (!enabled) return;
         if (streaming) endStream();
         if (inFlight) {
             final float fx = x, fy = y;
@@ -90,7 +103,7 @@ public final class GestureInjector {
 
     /** Move the injected finger to (x, y). Returns false if the point had to be clamped to the screen. */
     public boolean streamTo(float x, float y) {
-        if (!streaming) return true;
+        if (!streaming || ending) return true;
         targetX = cx(x);
         targetY = cy(y);
         pump();

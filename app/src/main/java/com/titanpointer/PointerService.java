@@ -63,6 +63,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     protected void onServiceConnected() {
+        if (cursor != null) teardown(); // connected again: don't leave the old cursor/windows behind
         running = this;
         prefs = Prefs.get(this);
         link = PadLink.get(this);
@@ -92,15 +93,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onDestroy() {
-        deactivate();
-        if (prefs != null) prefs.unregisterOnSharedPreferenceChangeListener(this);
-        if (link != null) link.removeListener(this);
-        if (cursor != null) {
-            try {
-                wm.removeView(cursor);
-            } catch (RuntimeException ignored) {
-            }
-        }
+        teardown();
         running = null;
         PointerTileService.requestUpdate(this);
         super.onDestroy();
@@ -108,8 +101,18 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public boolean onUnbind(android.content.Intent intent) {
+        teardown();
         running = null;
         return super.onUnbind(intent);
+    }
+
+    /** Remove every window and stop all input handling. Safe to call more than once. */
+    private void teardown() {
+        deactivate();
+        if (prefs != null) prefs.unregisterOnSharedPreferenceChangeListener(this);
+        if (link != null) link.removeListener(this);
+        removeCursorWindow();
+        cursor = null;
     }
 
     @Override
@@ -139,6 +142,8 @@ public final class PointerService extends AccessibilityService
         tracker.reset();
         engine.setScrollLock(false);
         engine.setConfig(Prefs.engineConfig(this, screenW));
+        injector.setEnabled(true);
+        addCursorWindow();
         if (isNoRoot(prefs)) {
             addCatcher();
         } else {
@@ -153,12 +158,24 @@ public final class PointerService extends AccessibilityService
         active = false;
         engine.reset();
         engine.setScrollLock(false);
-        injector.endStream();
+        dragging = false;
+        // Drop queued taps and lift any injected finger; nothing new is injected until reactivated.
+        injector.setEnabled(false);
         removeCatcher();
         link.setGrab(false);
         link.setOpen(OWNER, false);
+        main.removeCallbacks(autoHide);
         if (cursor != null) cursor.setState(CursorView.STATE_NORMAL);
         setCursorVisible(false);
+        removeCursorWindow(); // no window at all while pointer mode is off
+    }
+
+    /** Turn pointer mode on or off right away, and save it. */
+    private void setPointerMode(boolean on) {
+        if (on) activate();
+        else deactivate();
+        if (prefs.getBoolean(Prefs.ENABLED, true) != on) prefs.edit().putBoolean(Prefs.ENABLED, on).apply();
+        PointerTileService.requestUpdate(this);
     }
 
     // ---- No-root input: focused invisible window ----
@@ -168,6 +185,7 @@ public final class PointerService extends AccessibilityService
         catcher = new View(this) {
             @Override
             public boolean onGenericMotionEvent(MotionEvent e) {
+                if (stale()) return false;
                 if (e.isFromSource(InputDevice.SOURCE_TOUCHPAD)) {
                     onTouchpad(e);
                     return true;
@@ -177,12 +195,24 @@ public final class PointerService extends AccessibilityService
 
             @Override
             public boolean onKeyDown(int keyCode, KeyEvent event) {
+                if (stale()) return false;
                 return !isSystemKey(keyCode); // let volume etc. fall back to the system
             }
 
             @Override
             public boolean onKeyUp(int keyCode, KeyEvent event) {
+                if (stale()) return false;
                 return !isSystemKey(keyCode);
+            }
+
+            /** A catcher that outlived pointer mode removes itself instead of eating input. */
+            private boolean stale() {
+                if (active && catcher == this) return false;
+                try {
+                    wm.removeViewImmediate(this);
+                } catch (RuntimeException ignored) {
+                }
+                return true;
             }
         };
         catcher.setFocusable(true);
@@ -207,11 +237,12 @@ public final class PointerService extends AccessibilityService
         if (!usingCatcher) return;
         usingCatcher = false;
         try {
-            wm.removeView(catcher);
+            wm.removeViewImmediate(catcher);
         } catch (RuntimeException ignored) {
         }
         catcher = null;
         contacts.clear();
+        catcherDevice = -1;
     }
 
     /** Touchpad MotionEvent (raw device units) -> contacts for the gesture engine. */
@@ -273,7 +304,7 @@ public final class PointerService extends AccessibilityService
                 if (isSystemKey(k)) return false;
                 // Any other key means "I want to type": leave pointer mode. This key press is used up.
                 if (down) {
-                    prefs.edit().putBoolean(Prefs.ENABLED, false).apply();
+                    setPointerMode(false);
                     Toast.makeText(this, R.string.typing_mode, Toast.LENGTH_SHORT).show();
                 }
                 return true;
@@ -281,8 +312,8 @@ public final class PointerService extends AccessibilityService
     }
 
     private void toggle() {
-        boolean on = !prefs.getBoolean(Prefs.ENABLED, true);
-        prefs.edit().putBoolean(Prefs.ENABLED, on).apply();
+        boolean on = !active;
+        setPointerMode(on);
         Toast.makeText(this, on ? R.string.pointer_on : R.string.pointer_off, Toast.LENGTH_SHORT).show();
     }
 
@@ -290,7 +321,7 @@ public final class PointerService extends AccessibilityService
     public void onSharedPreferenceChanged(SharedPreferences p, String key) {
         if (key == null) return;
         switch (key) {
-            case Prefs.ENABLED:
+            case Prefs.ENABLED: // from the app's switch or the Quick Settings tile
                 if (p.getBoolean(Prefs.ENABLED, true)) activate();
                 else deactivate();
                 PointerTileService.requestUpdate(this);
@@ -396,6 +427,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onPointerMove(float dx, float dy) {
+        if (!active) return;
         px = clamp(px + dx, 0, screenW - 1);
         py = clamp(py + dy, 0, screenH - 1);
         setCursorVisible(true);
@@ -405,6 +437,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onClick() {
+        if (!active) return;
         setCursorVisible(true);
         flash();
         injector.tap(px, py);
@@ -412,6 +445,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onSecondaryClick() {
+        if (!active) return;
         setCursorVisible(true);
         flash();
         injector.longPress(px, py);
@@ -419,6 +453,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onTertiaryTap() {
+        if (!active) return;
         switch (prefs.getString(Prefs.THREE_FINGER, "back")) {
             case "back":
                 performGlobalAction(GLOBAL_ACTION_BACK);
@@ -439,6 +474,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onScrollBegin() {
+        if (!active) return;
         setCursorVisible(true);
         cursor.setState(CursorView.STATE_SCROLL);
         scrollX = px;
@@ -448,6 +484,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onScroll(float dx, float dy) {
+        if (!active) return;
         scrollX += dx;
         scrollY += dy;
         if (!injector.streamTo(scrollX, scrollY)) {
@@ -468,6 +505,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onDragBegin() {
+        if (!active) return;
         dragging = true;
         cursor.setState(CursorView.STATE_PRESSED);
         injector.beginStream(px, py);
@@ -496,8 +534,29 @@ public final class PointerService extends AccessibilityService
             lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
         cursor.setVisibility(View.GONE);
+    }
+
+    private boolean cursorAttached = false;
+
+    private void addCursorWindow() {
+        if (cursor == null || cursorAttached) return;
         placeCursorParams();
-        wm.addView(cursor, lp);
+        try {
+            wm.addView(cursor, lp);
+            cursorAttached = true;
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private void removeCursorWindow() {
+        if (cursor == null || !cursorAttached) return;
+        cursorAttached = false;
+        cursorShown = false;
+        cursor.setVisibility(View.GONE);
+        try {
+            wm.removeViewImmediate(cursor);
+        } catch (RuntimeException ignored) {
+        }
     }
 
     private void placeCursorParams() {
@@ -506,7 +565,7 @@ public final class PointerService extends AccessibilityService
     }
 
     private void placeCursor() {
-        if (cursor == null || !cursorShown) return;
+        if (cursor == null || !cursorShown || !cursorAttached) return;
         placeCursorParams();
         try {
             wm.updateViewLayout(cursor, lp);
@@ -516,7 +575,7 @@ public final class PointerService extends AccessibilityService
 
     private void setCursorVisible(boolean v) {
         if (cursor == null) return;
-        v = v && active;
+        v = v && active && cursorAttached;
         main.removeCallbacks(autoHide);
         if (v != cursorShown) {
             cursorShown = v;
@@ -536,7 +595,7 @@ public final class PointerService extends AccessibilityService
     private void flash() {
         cursor.setState(CursorView.STATE_PRESSED);
         main.postDelayed(() -> {
-            if (!dragging && !injector.isStreaming()) cursor.setState(CursorView.STATE_NORMAL);
+            if (cursor != null && !dragging && !injector.isStreaming()) cursor.setState(CursorView.STATE_NORMAL);
         }, 150);
     }
 
