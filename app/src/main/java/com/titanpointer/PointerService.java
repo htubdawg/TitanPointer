@@ -89,7 +89,43 @@ public final class PointerService extends AccessibilityService
         link.addListener(this);
         if (prefs.getBoolean(Prefs.ENABLED, true)) activate();
         PointerTileService.requestUpdate(this);
+        startKeepAlive();
     }
+
+    /**
+     * Run as a foreground service. Swiping the app away from Recents kills every process of the app
+     * that has no foreground service, and Android 10 doesn't restart an accessibility service whose
+     * process died until it's switched on again. The notification uses the quietest channel.
+     */
+    private void startKeepAlive() {
+        try {
+            android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
+            android.app.NotificationChannel ch = new android.app.NotificationChannel(KEEPALIVE_CHANNEL,
+                    getString(R.string.keepalive_channel), android.app.NotificationManager.IMPORTANCE_MIN);
+            ch.setShowBadge(false);
+            nm.createNotificationChannel(ch);
+            android.content.Intent open = new android.content.Intent(this, MainActivity.class)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            android.app.Notification n = new android.app.Notification.Builder(this, KEEPALIVE_CHANNEL)
+                    .setSmallIcon(R.drawable.ic_tile)
+                    .setContentTitle(getString(R.string.keepalive_title))
+                    .setContentText(getString(R.string.keepalive_text))
+                    .setContentIntent(android.app.PendingIntent.getActivity(this, 0, open,
+                            android.app.PendingIntent.FLAG_IMMUTABLE))
+                    .setOngoing(true)
+                    .build();
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                startForeground(KEEPALIVE_ID, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            } else {
+                startForeground(KEEPALIVE_ID, n);
+            }
+        } catch (RuntimeException e) {
+            android.util.Log.w("TitanPointer", "foreground failed: " + e);
+        }
+    }
+
+    private static final String KEEPALIVE_CHANNEL = "keepalive";
+    private static final int KEEPALIVE_ID = 1;
 
     @Override
     public void onDestroy() {
@@ -113,6 +149,10 @@ public final class PointerService extends AccessibilityService
         if (link != null) link.removeListener(this);
         removeCursorWindow();
         cursor = null;
+        try {
+            stopForeground(true);
+        } catch (RuntimeException ignored) {
+        }
     }
 
     @Override

@@ -64,6 +64,12 @@ Then: `./gradlew lintRelease testDebugUnitTest assembleRelease` →
 `app/build/outputs/apk/release/app-release.apk` (signed with the debug key). minSdk 26, so check for
 APIs that need newer Android (lint catches them as NewApi).
 
+## v1.4: survive closing the app
+Swiping TitanPointer from Recents killed the process; Android 10 marks the accessibility service as
+crashed and doesn't rebind it until re-toggled. `PointerService` now calls startForeground (IMPORTANCE_MIN
+channel, type specialUse) so task removal doesn't kill the process. Don't move activities to another
+process: prefs listeners, `PointerService.isRunning()` and `PadLink` assume one process.
+
 ## Open items / ideas
 - Ask the user what "mostly working" leaves out, and tune from there (speed, acceleration, tap
   sensitivity, scroll speed).

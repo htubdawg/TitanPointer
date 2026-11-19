@@ -6,5 +6,8 @@
     <string name="pointer_on">Keyboard pointer on</string>
     <string name="pointer_off">Keyboard pointer off</string>
     <string name="service_description">Turns the Titan\'s touch-sensitive keyboard into a touchpad. Shows an on-screen pointer, taps where it points, and watches key presses so typing is not mistaken for touchpad use and so a shortcut key can toggle the pointer. Nothing is collected or sent anywhere.</string>
+    <string name="keepalive_channel">Keep running</string>
+    <string name="keepalive_title">Keyboard pointer ready</string>
+    <string name="keepalive_text">Keeps the pointer working when TitanPointer is closed. You can hide this in notification settings.</string>
     <string name="typing_mode">Pointer off: type away. Use your shortcut or the tile to bring it back.</string>
 </resources>
