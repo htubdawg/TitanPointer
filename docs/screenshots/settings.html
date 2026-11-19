@@ -1,0 +1,147 @@
+<!doctype html>
+<!--
+  Rendering of TitanPointer's settings screen (MainActivity.build(), no-root mode, default settings),
+  styled as Android 10 Theme.Material.Light.DarkActionBar on the Titan's 1440x1440 screen (480dp at 3x).
+  Regenerate the PNGs with: node docs/screenshots/render.js
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --primary: #37474F; --primary-dark: #263238; --accent: #2196F3;
+    --text-primary: rgba(0,0,0,.87); --text-secondary: rgba(0,0,0,.54);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fafafa; font-family: Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  .screen { width: 480px; }
+  .status { height: 24px; background: var(--primary-dark); color: #fff; font-size: 14px; display: flex;
+            align-items: center; justify-content: space-between; padding: 0 12px 0 16px; }
+  .status .icons { display: flex; gap: 6px; align-items: center; }
+  .bar { height: 56px; background: var(--primary); color: #fff; font-size: 20px; font-weight: 500;
+         display: flex; align-items: center; padding: 0 16px; box-shadow: 0 2px 4px rgba(0,0,0,.25);
+         position: relative; z-index: 1; }
+  .scroll { height: 400px; overflow: hidden; }
+  .content { padding: 8px 16px 32px; }
+  .section { font-size: 18px; font-weight: 700; color: var(--text-secondary); padding: 20px 0 6px; }
+  .text { font-size: 15px; color: var(--text-secondary); padding: 4px 0; white-space: pre-line; line-height: 1.3; }
+  .hint { font-size: 13px; opacity: .7; }
+  .ok { color: var(--text-secondary); }
+  .btn { display: inline-block; margin: 6px 4px 6px 0; min-width: 88px; height: 36px; padding: 0 16px;
+         background: #d6d7d7; border-radius: 2px; font-size: 14px; font-weight: 500; text-transform: uppercase;
+         letter-spacing: .5px; color: var(--text-primary); line-height: 36px; text-align: center;
+         box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 1px 1px rgba(0,0,0,.12); }
+  .row { display: flex; align-items: center; }
+  .switch { display: flex; align-items: center; justify-content: space-between; padding: 8px 0;
+            font-size: 15px; color: var(--text-primary); }
+  .switch .lbl { flex: 1; padding-right: 16px; line-height: 1.3; }
+  .sw { position: relative; width: 36px; height: 20px; flex: none; }
+  .sw .track { position: absolute; left: 2px; right: 2px; top: 3px; height: 14px; border-radius: 7px; background: rgba(0,0,0,.38); }
+  .sw .thumb { position: absolute; top: 0; left: 0; width: 20px; height: 20px; border-radius: 50%; background: #ececec;
+               box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .sw.on .track { background: rgba(33,150,243,.5); }
+  .sw.on .thumb { left: 16px; background: var(--accent); }
+  .radio { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 15px; color: var(--text-primary); }
+  .rb { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(0,0,0,.54); flex: none; position: relative; }
+  .rb.on { border-color: var(--accent); }
+  .rb.on::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
+  .seek .lbl { font-size: 15px; color: var(--text-secondary); padding-top: 8px; }
+  .seek .track { position: relative; height: 32px; margin: 0 16px; }
+  .seek .line { position: absolute; left: 0; right: 0; top: 15px; height: 2px; background: rgba(0,0,0,.26); }
+  .seek .fill { position: absolute; left: 0; top: 15px; height: 2px; background: var(--accent); }
+  .seek .knob { position: absolute; top: 10px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent); }
+  .spinner { display: flex; align-items: center; padding: 4px 0; }
+  .spinner .lbl { flex: 1; font-size: 15px; color: var(--text-secondary); }
+  .spinner .val { font-size: 16px; color: var(--text-primary); padding: 8px 28px 8px 8px; position: relative; }
+  .spinner .val::after { content: ""; position: absolute; right: 6px; bottom: 10px; border-left: 5px solid transparent;
+                         border-right: 5px solid transparent; border-top: 5px solid rgba(0,0,0,.54); transform: rotate(-45deg) translate(2px,2px); }
+  .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 11px; color: var(--text-secondary); white-space: pre; padding: 4px 0; line-height: 1.35; }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="status"><span>7:40</span><span class="icons">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M12 21L1 8a16 16 0 0 1 22 0z"/></svg>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M2 22h20V2z"/></svg>
+    <svg width="9" height="14" viewBox="0 0 10 16" fill="#fff"><rect x="3" y="0" width="4" height="2"/><rect x="0" y="2" width="10" height="14" rx="1"/></svg>
+  </span></div>
+  <div class="bar">TitanPointer</div>
+  <div class="scroll" id="scroll"><div class="content" id="content"></div></div>
+</div>
+<script>
+  // Mirrors MainActivity.build() (no-root mode: the root/ADB box and sections 3-4 are hidden).
+  const c = document.getElementById('content');
+  const add = (html) => c.insertAdjacentHTML('beforeend', html);
+  const section = (t) => add(`<div class="section">${t}</div>`);
+  const text = (t, cls = '') => add(`<div class="text ${cls}">${t}</div>`);
+  const hint = (t) => text(t, 'hint');
+  const button = (t) => `<span class="btn">${t}</span>`;
+  const sw = (label, on) => add(`<div class="switch"><span class="lbl">${label}</span><span class="sw ${on ? 'on' : ''}"><span class="track"></span><span class="thumb"></span></span></div>`);
+  const radio = (label, on) => add(`<div class="radio"><span class="rb ${on ? 'on' : ''}"></span>${label}</div>`);
+  const seek = (label, min, max, def, fmt) => {
+    const f = (def - min) / (max - min) * 100;
+    add(`<div class="seek"><div class="lbl">${label}: ${fmt(def)}</div><div class="track"><div class="line"></div><div class="fill" style="width:${f}%"></div><div class="knob" style="left:${f}%"></div></div></div>`);
+  };
+  const spinner = (label, val) => add(`<div class="spinner"><span class="lbl">${label}</span><span class="val">${val}</span></div>`);
+  const keyBinding = (label, desc) => { text(`${label}: ${desc}`); add(`<div class="row">${button('Set')}${button('Clear')}${button('Default')}</div>`); };
+  const x = (v) => (v / 10).toFixed(1) + '×';
+
+  section('1. Turn on the service');
+  text('✓ Accessibility service is on', 'ok');
+  sw('Pointer mode', true);
+  hint('Toggle with Alt + Space (change it under Keys), or the Quick Settings tile “Keyboard pointer”.');
+
+  section('2. How to read the keyboard');
+  radio('No root (recommended)', true);
+  radio('Root (su): typing and pointer at the same time', false);
+  radio('ADB helper: like root, started from a computer', false);
+  hint('The Titan reports keyboard touches only to the app that has keyboard focus, so while pointer mode is on, TitanPointer holds the focus. Keys can’t reach the app underneath until you turn it off.');
+  text('• Slide: move the pointer · Tap: click\n• Enter: click · Alt + Enter: long press (change under Keys)\n• Space: scroll mode on/off\n• Alt + Space: pointer mode on/off');
+  spinner('Letter keys in pointer mode', 'Do nothing');
+  add(button('Open keyboard input probe'));
+
+  section('Direction');
+  sw('Swap X and Y', false);
+  sw('Invert horizontal', false);
+  sw('Invert vertical', false);
+
+  section('Pointer');
+  seek('Speed', 1, 20, 7, x);
+  seek('Acceleration', 0, 40, 10, (v) => (v / 10).toFixed(1));
+  seek('Vertical speed', 3, 40, 10, x);
+  seek('Pointer size', 6, 30, 10, x);
+  seek('Hide pointer when idle', 0, 30, 5, (v) => v === 0 ? 'never' : v + ' s');
+
+  section('Clicking');
+  sw('Tap to click', true);
+  sw('Tap, then touch and move to drag (adds a short click delay)', true);
+  seek('Ignore touches after a key press', 0, 1000, 350, (v) => v + ' ms');
+  seek('Ignore touches that start in the top key row', 0, 40, 22, (v) => v === 0 ? 'off' : v + '% of the keyboard');
+  hint('The top row (Shift, Recents, the home key, Back, Alt) is part of the touch surface. Touches that start there don’t move the pointer or click; a slide that starts lower can still run into it.');
+
+  section('Scrolling (Space turns scroll mode on/off)');
+  hint('In scroll mode, slides scroll and taps never click.');
+  seek('Scroll speed', 2, 60, 15, x);
+  sw('Reverse scroll direction', false);
+
+  section('Keys');
+  keyBinding('Pointer mode on/off', 'Alt + Space');
+  hint('Works everywhere. The key is swallowed while it toggles pointer mode, so pick a combination you don’t type with.');
+  keyBinding('Click', 'Enter');
+  keyBinding('Long press', 'Alt + Enter');
+  hint('Click and long press act at the pointer while pointer mode is on.');
+
+  section('Gestures');
+  text('• Slide: move the pointer\n• Tap: click (tap)\n• Tap twice: double tap\n• Tap, then touch again and move: drag\n• Space, then slide: scroll\n• Typing is ignored automatically');
+
+  section('Diagnostics');
+  hint('What the pointer saw recently: focus changes, which windows opened, keys and where they came from. If the pointer stops working somewhere, reproduce it, come back here and copy this.');
+  add(`<div class="mono">00:03:41.111  pointer mode ON (no root)
+00:03:41.120  keyboard app hidden for pointer mode: ok
+00:03:41.133  focus window added
+00:03:41.176  focus window HAS keyboard focus
+00:03:41.465  touchpad event reached the focus window</div>`);
+  add(`<div class="row">${button('Copy')}${button('Clear')}</div>`);
+</script>
+</body>
+</html>

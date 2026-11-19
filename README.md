@@ -6,7 +6,15 @@ touchpad with an on-screen mouse pointer. No root needed.
 > **AI-generated code.** All of the code in this repository was written by an AI (Claude, by Anthropic),
 > directed and tested by a human on a real Titan. Review it before you trust it with anything important.
 
-<!-- Settings screenshot: docs/images/settings.png (taken on the phone) -->
+<p>
+  <img src="docs/images/settings-1.png" width="32%" alt="Settings: service status, pointer mode switch, no-root mode">
+  <img src="docs/images/settings-2.png" width="32%" alt="Settings: pointer speed, acceleration, size">
+  <img src="docs/images/settings-3.png" width="32%" alt="Settings: click, long-press and toggle keys">
+</p>
+
+<sub>The settings screen at the Titan's 1440 × 1440 resolution, with default settings. These are renderings of
+the app's layout (<code>docs/screenshots/</code>, made with <code>node docs/screenshots/render.js</code>), not
+captures from a phone.</sub>
 
 ## What it does
 
