@@ -9,5 +9,6 @@
     <string name="keepalive_channel">Keep running</string>
     <string name="keepalive_title">Keyboard pointer ready</string>
     <string name="keepalive_text">Keeps the pointer working when TitanPointer is closed. You can hide this in notification settings.</string>
+    <string name="focus_lost">TitanPointer lost keyboard focus to another window, so it can\'t see keyboard touches here. Toggle pointer mode to retry.</string>
     <string name="typing_mode">Pointer off: type away. Use your shortcut or the tile to bring it back.</string>
 </resources>

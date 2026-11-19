@@ -48,6 +48,11 @@ public final class CursorView extends View {
         invalidate();
     }
 
+    /** Faded while the pointer can't receive touches (another window has keyboard focus). */
+    public void setDimmed(boolean d) {
+        setAlpha(d ? 0.35f : 1f);
+    }
+
     public void setState(int s) {
         if (s != state) {
             state = s;

@@ -42,3 +42,13 @@ direction settings move the pointer the right way on the user's phone, which fit
 Expected Android key codes: Back = KEYCODE_BACK, Recents = KEYCODE_APP_SWITCH, Shift = KEYCODE_SHIFT_LEFT,
 Alt = KEYCODE_ALT_LEFT, Enter = KEYCODE_ENTER, Backspace = KEYCODE_DEL. The home/fingerprint key has not been
 checked. The probe screen in the app logs real key codes.
+
+## Keyboard apps and the touch surface (user report)
+- The stock original Titan doesn't move the text cursor with keyboard swipes. The **BlackBerry Keyboard**
+  app (which the user uses) does.
+- How an input method can see the pad: Android sends non-pointer motion events (SOURCE_TOUCHPAD is
+  SOURCE_CLASS_POSITION) through the IME stage of the focused window if that window can use an input
+  method. So in a text field, the BlackBerry Keyboard gets the swipes first.
+- TitanPointer's focus window has FLAG_ALT_FOCUSABLE_IM, so it isn't an input-method target and should get
+  the swipes itself, *while it has focus*. v1.6 logs focus changes (Diagnostics in the app) to find out
+  what happens in apps where the pointer stops working (reported: a notes app).

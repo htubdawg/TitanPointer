@@ -257,7 +257,36 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 + "• Tap, then touch again and move: drag\n"
                 + "• Space, then slide: scroll\n"
                 + "• Typing is ignored automatically");
+
+        // --- Diagnostics
+        section("Diagnostics");
+        hint("What the pointer saw recently: focus changes, which windows opened, keys and where they came from. "
+                + "If the pointer stops working somewhere, reproduce it, come back here and copy this.");
+        diagText = text("");
+        diagText.setTypeface(Typeface.MONOSPACE);
+        diagText.setTextSize(11);
+        diagText.setTextIsSelectable(true);
+        LinearLayout dr = new LinearLayout(this);
+        Button copyDiag = new Button(this);
+        copyDiag.setText("Copy");
+        copyDiag.setOnClickListener(v -> {
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(ClipData.newPlainText("TitanPointer diagnostics",
+                    "TitanPointer " + BuildConfig.VERSION_NAME + "\n" + Diag.dump()));
+            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+        });
+        Button clearDiag = new Button(this);
+        clearDiag.setText("Clear");
+        clearDiag.setOnClickListener(v -> {
+            Diag.clear();
+            refresh();
+        });
+        dr.addView(copyDiag);
+        dr.addView(clearDiag);
+        root.addView(dr);
     }
+
+    private TextView diagText;
 
     private void finishCalibration(boolean save) {
         if (calibrateButton.getTag() == null) return;
@@ -361,6 +390,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 prefs.getInt(Prefs.ZONE_XMAX, 0), prefs.getInt(Prefs.ZONE_YMIN, 0), prefs.getInt(Prefs.ZONE_YMAX, 0)} : null);
 
         for (Runnable r : keyLabels) r.run();
+        if (diagText != null) diagText.setText(Diag.dump());
     }
 
     private String adbCommandText() {

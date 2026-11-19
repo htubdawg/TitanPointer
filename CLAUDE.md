@@ -78,6 +78,13 @@ process: prefs listeners, `PointerService.isRunning()` and `PadLink` assume one 
 Speed 0.1–2.0× (default 0.7), multi-finger gestures removed, scroll fixes, top-row ignore zone (22%,
 estimated from a photo: unconfirmed), letters setting, settable click/long-press keys, Backspace no longer = Back.
 
+## v1.6
+User: pointer doesn't work in their notes app (text field; they use the BlackBerry Keyboard, which moves
+the text cursor with pad swipes). Cause unknown. Added `Diag` (in-memory log shown/copyable at the bottom
+of the app: focus gained/lost, windows, keys + source device, non-touchpad motion events) and focus
+recovery: when the focus window loses focus it re-adds itself (max 3 tries per 10 s, not on the lock
+screen) and the cursor fades while unfocused. Ask the user for the copied log from the notes app.
+
 ## Open items / ideas
 - Confirm the 22% top-row cut-off and raw Y direction on the phone.
 - The catcher may lose focus to other overlays or dialogs. There's no recovery logic yet.

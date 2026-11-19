@@ -156,7 +156,16 @@ public final class PointerService extends AccessibilityService
     }
 
     @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {}
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
+        String w = event.getPackageName() + "/" + event.getClassName();
+        if (w.equals(foreground)) return;
+        foreground = w;
+        if (active) Diag.log("window: " + w);
+    }
+
+    /** Last window reported by accessibility events, for the diagnostics log. */
+    private String foreground = "?";
 
     @Override
     public void onInterrupt() {}
@@ -179,6 +188,7 @@ public final class PointerService extends AccessibilityService
     private void activate() {
         if (active) return;
         active = true;
+        Diag.log("pointer mode ON (" + (isNoRoot(prefs) ? "no root" : "helper") + "), foreground: " + foreground);
         tracker.reset();
         engine.setScrollLock(false);
         engine.setConfig(Prefs.engineConfig(this, screenW));
@@ -196,6 +206,7 @@ public final class PointerService extends AccessibilityService
     private void deactivate() {
         if (!active) return;
         active = false;
+        Diag.log("pointer mode OFF");
         engine.reset();
         engine.setScrollLock(false);
         dragging = false;
@@ -229,10 +240,20 @@ public final class PointerService extends AccessibilityService
             public boolean onGenericMotionEvent(MotionEvent e) {
                 if (stale()) return false;
                 if (e.isFromSource(InputDevice.SOURCE_TOUCHPAD)) {
+                    Diag.logEvery("pad", 2000, "touchpad event reached the focus window");
                     onTouchpad(e);
                     return true;
                 }
+                Diag.logEvery("motion" + e.getSource(), 2000, "other motion event: source=0x"
+                        + Integer.toHexString(e.getSource()) + " device=" + deviceName(e.getDevice()));
                 return super.onGenericMotionEvent(e);
+            }
+
+            @Override
+            public void onWindowFocusChanged(boolean hasFocus) {
+                super.onWindowFocusChanged(hasFocus);
+                if (stale()) return;
+                onCatcherFocus(hasFocus);
             }
 
             @Override
@@ -269,15 +290,64 @@ public final class PointerService extends AccessibilityService
             wm.addView(catcher, p);
             usingCatcher = true;
             catcher.requestFocus();
+            Diag.log("focus window added");
         } catch (RuntimeException e) {
             catcher = null;
+            Diag.log("focus window could not be added: " + e);
             Toast.makeText(this, "TitanPointer could not take keyboard focus", Toast.LENGTH_LONG).show();
         }
+    }
+
+    // ---- Focus recovery ----
+
+    private boolean catcherFocused = false;
+    private long regainWindowStart = 0;
+    private int regainAttempts = 0;
+    private static final int MAX_REGAIN = 3;
+    private static final long REGAIN_WINDOW_MS = 10000, REGAIN_DELAY_MS = 400;
+
+    private final Runnable regainFocus = () -> {
+        if (!active || !usingCatcher || catcherFocused) return;
+        android.app.KeyguardManager km = getSystemService(android.app.KeyguardManager.class);
+        if (km != null && km.isKeyguardLocked()) {
+            Diag.log("screen locked: not taking focus back");
+            return;
+        }
+        long now = SystemClock.uptimeMillis();
+        if (now - regainWindowStart > REGAIN_WINDOW_MS) {
+            regainWindowStart = now;
+            regainAttempts = 0;
+        }
+        if (regainAttempts >= MAX_REGAIN) {
+            if (regainAttempts++ > MAX_REGAIN) return; // already told the user
+            Diag.log("giving up on getting focus back (another window keeps it): " + foreground);
+            Toast.makeText(this, R.string.focus_lost, Toast.LENGTH_LONG).show();
+            return;
+        }
+        regainAttempts++;
+        Diag.log("re-adding focus window to get focus back (attempt " + regainAttempts + ")");
+        removeCatcher();
+        addCatcher();
+    };
+
+    private void onCatcherFocus(boolean has) {
+        catcherFocused = has;
+        Diag.log(has ? "focus window HAS keyboard focus" : "focus window LOST keyboard focus (foreground: " + foreground + ")");
+        if (cursor != null) cursor.setDimmed(!has);
+        main.removeCallbacks(regainFocus);
+        if (!has && active) main.postDelayed(regainFocus, REGAIN_DELAY_MS);
+    }
+
+    private static String deviceName(InputDevice d) {
+        return d == null ? "?" : d.getName();
     }
 
     private void removeCatcher() {
         if (!usingCatcher) return;
         usingCatcher = false;
+        catcherFocused = false;
+        main.removeCallbacks(regainFocus);
+        if (cursor != null) cursor.setDimmed(false);
         try {
             wm.removeViewImmediate(catcher);
         } catch (RuntimeException ignored) {
@@ -419,6 +489,10 @@ public final class PointerService extends AccessibilityService
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        if (active && event.getAction() == KeyEvent.ACTION_DOWN) {
+            Diag.logEvery("key" + event.getKeyCode(), 1000, "key " + KeyEvent.keyCodeToString(event.getKeyCode())
+                    + " from " + deviceName(event.getDevice()) + (usingCatcher && !catcherFocused ? " (no focus)" : ""));
+        }
         int toggleKey = prefs.getInt(Prefs.TOGGLE_KEY, Prefs.DEFAULT_TOGGLE_KEY);
         if (toggleKey != 0 && event.getKeyCode() == toggleKey) {
             int want = prefs.getInt(Prefs.TOGGLE_META, Prefs.DEFAULT_TOGGLE_META);
