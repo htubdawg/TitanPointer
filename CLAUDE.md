@@ -10,6 +10,9 @@ on-screen pointer. Status at v1.2: the user reports the no-root mode is "mostly 
 - Listen to what they say they observed. They were right that a no-root app can read the keyboard touches.
 - Develop on branch `ccr-b45e6ac7-nxr23a`. Don't open a PR unless asked.
 
+- **Signing**: builds use `signing/titanpointer.keystore` (committed). Never change it, or the user has to
+  uninstall to update. v1.2 used a lost key, so going from 1.2 to 1.3 needed an uninstall.
+
 ## Facts measured on the user's Titan (Android 10, build QP1A.190711.020)
 Input devices as an app sees them:
 - `mtk-pad`: **the keyboard touch sensor**, source TOUCHPAD, X 0..1440, Y 0..720, **absolute** positions.
