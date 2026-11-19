@@ -95,7 +95,7 @@ public final class PointerService extends AccessibilityService
     /**
      * Run as a foreground service. Swiping the app away from Recents kills every process of the app
      * that has no foreground service, and Android 10 doesn't restart an accessibility service whose
-     * process died until it's switched on again. The notification uses the quietest channel.
+     * process died until it's switched on again. The notification uses the quietest channel and is hidden from the lock screen.
      */
     private void startKeepAlive() {
         try {
@@ -103,6 +103,8 @@ public final class PointerService extends AccessibilityService
             android.app.NotificationChannel ch = new android.app.NotificationChannel(KEEPALIVE_CHANNEL,
                     getString(R.string.keepalive_channel), android.app.NotificationManager.IMPORTANCE_MIN);
             ch.setShowBadge(false);
+            ch.setLockscreenVisibility(android.app.Notification.VISIBILITY_SECRET);
+            nm.deleteNotificationChannel("keepalive"); // v1.4-1.7 channel: settings can't change once created
             nm.createNotificationChannel(ch);
             android.content.Intent open = new android.content.Intent(this, MainActivity.class)
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -113,6 +115,7 @@ public final class PointerService extends AccessibilityService
                     .setContentIntent(android.app.PendingIntent.getActivity(this, 0, open,
                             android.app.PendingIntent.FLAG_IMMUTABLE))
                     .setOngoing(true)
+                    .setVisibility(android.app.Notification.VISIBILITY_SECRET) // never on the lock screen
                     .build();
             if (android.os.Build.VERSION.SDK_INT >= 34) {
                 startForeground(KEEPALIVE_ID, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
@@ -124,7 +127,7 @@ public final class PointerService extends AccessibilityService
         }
     }
 
-    private static final String KEEPALIVE_CHANNEL = "keepalive";
+    private static final String KEEPALIVE_CHANNEL = "keepalive_hidden";
     private static final int KEEPALIVE_ID = 1;
 
     @Override
