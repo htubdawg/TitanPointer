@@ -1,93 +1,105 @@
 # TitanPointer
 
-Turns the touch-sensitive physical keyboard of the original **Unihertz Titan** into a laptop-style
-touchpad with an on-screen mouse pointer.
+Turns the touch-sensitive physical keyboard of the original **Unihertz Titan** (2019) into a laptop-style
+touchpad with an on-screen mouse pointer. No root needed.
+
+> **AI-generated code.** All of the code in this repository was written by an AI (Claude, by Anthropic),
+> directed and tested by a human on a real Titan. Review it before you trust it with anything important.
+
+<!-- Settings screenshot: docs/images/settings.png (taken on the phone) -->
+
+## What it does
 
 | On the keyboard | Result |
 |---|---|
 | Slide | Move the pointer (with acceleration) |
-| Tap | Click (tap at the pointer) |
+| Tap | Click at the pointer |
 | Tap twice | Double tap |
-| Tap, then touch again and slide | Drag (press and hold at the pointer and move) |
+| Tap, then touch again and slide | Drag (press, hold and move at the pointer) |
 | Space, then slide | Scroll mode: slides scroll, taps never click |
 
-The Titan's keyboard reports one finger at a time. Touches that start on the top key row (Shift, Recents,
-home, Back, Alt) are ignored. See [docs/titan-hardware.md](docs/titan-hardware.md).
-
-Typing is detected automatically: touches during and just after a key press don't move the pointer or click.
-
-## Install
-
-1. Install `dist/TitanPointer-1.2.apk` (or build it, see below).
-2. Open **TitanPointer** and follow the steps on screen:
-   1. **Turn on the accessibility service** (Settings → Accessibility → TitanPointer). It draws the
-      pointer, injects taps, and watches key presses to tell typing apart from touchpad use.
-   2. **Give it access to the keyboard sensor** using one of the options below.
-   3. **Find devices** and choose the keyboard's touch sensor (the ★ entry is the app's best guess).
-   4. **Test**: touch the keyboard and check that the dots follow your fingers. Adjust the direction
-      settings (swap or invert) if the pointer moves the wrong way.
-3. Turn pointer mode on or off with the Quick Settings tile **Keyboard pointer**, the switch in the
-   app, or a shortcut key you choose.
-
-### No-root mode (default)
-
-The Titan's keyboard sensor shows up to apps as its own touchpad device (`mtk-pad`, 1440×720, absolute
-positions), but Android only sends its events to the window with keyboard focus. In no-root mode, while
-pointer mode is on, TitanPointer keeps an invisible window focused (screen touches pass straight through),
-so the keys get pointer jobs:
-
-| Key | Action |
+| Key (while pointer mode is on) | Action |
 |---|---|
+| Alt + Space | Pointer mode on/off (works everywhere; changeable) |
 | Enter | Click (changeable) |
 | Alt + Enter | Long press (changeable) |
 | Space | Scroll mode on/off |
 | Back | Back, as usual |
 | Letters | Nothing by default (setting: turn pointer mode off) |
-| Alt + Space | Pointer mode on/off (changeable) |
 
-Root or ADB mode reads the sensor directly
-and lets you type while the pointer is on.
+- The Titan's keyboard reports **one finger** at a time, so there are no multi-finger gestures.
+- Touches that start on the top key row (Shift, Recents, home, Back, Alt) are ignored, so pressing those
+  keys doesn't click. The cut-off is adjustable.
+- Touches during and just after a key press don't move the pointer or click.
+- Pointer mode can also be switched with the Quick Settings tile **Keyboard pointer** or the switch in
+  the app.
 
-### Root or ADB mode
+Hardware details (keyboard layout, sensor range, key codes): [docs/titan-hardware.md](docs/titan-hardware.md).
 
-Android doesn't let normal apps read raw touch data from the keyboard's sensor. TitanPointer ships a tiny
-helper (`native/titanpad.c`, about 300 lines) that reads `/dev/input/eventN` and passes the touches to
-the app. It needs one of these:
+## Install
 
-- **Root (Magisk):** choose *Root* and approve the su prompt. Nothing else to do.
-- **No root, using ADB:** choose *ADB helper*, enable USB debugging, and after every reboot run the
-  command shown in the app from a computer, or this script:
-  ```sh
-  scripts/start-adb-helper.sh <token shown in the app>
-  ```
-  The helper listens only on `127.0.0.1` and rejects any client that doesn't send the app's random token.
+1. Install [`dist/TitanPointer-1.7.apk`](dist/TitanPointer-1.7.apk).
+2. Open **TitanPointer** and turn on its accessibility service (Settings → Accessibility → TitanPointer).
+   It draws the pointer, sends taps and swipes at the pointer, and reads key presses for the shortcuts.
+   Nothing is collected or sent anywhere.
+3. Press **Alt + Space** and slide on the keyboard.
 
-### Exclusive access
+The app shows a minimal, silent notification while the service runs. It keeps Android from stopping the
+service when you swipe the app away; you can hide it in the notification settings.
 
-With **Exclusive access** on, the helper uses `EVIOCGRAB` while pointer mode is on, so Android and the
-Titan's built-in keyboard scrolling stop reacting to your swipes. It is turned off automatically if the
-chosen device also produces key presses or is the main touchscreen, because grabbing it would block
-typing or the screen. If the sensor turns out to be part of the main touchscreen, use **Calibrate
-area** to limit the pointer to the keyboard region.
+## How it works (no-root mode)
+
+The Titan's keyboard sensor shows up to apps as its own touchpad device (`mtk-pad`, 1440×720, absolute
+positions), and Android only sends its events to the window with keyboard focus. While pointer mode is on,
+TitanPointer keeps a tiny invisible window focused (screen touches pass straight through), turns the
+touches into pointer movement, and injects taps and swipes through the accessibility service.
+
+Because that window holds keyboard focus, keys can't reach the app underneath while pointer mode is on:
+turn it off (Alt + Space) to type. While pointer mode is on, the keyboard app (e.g. BlackBerry Keyboard)
+is hidden and the text field loses focus, because otherwise the keyboard app receives the keyboard touches
+instead. Both are restored when you turn pointer mode off.
+
+If the pointer stops working somewhere, the **Diagnostics** section at the bottom of the app logs focus
+changes, windows and keys, and can be copied.
+
+## Root and ADB modes (untested)
+
+> **These modes have never been tested on a real device.** They're there for anyone who wants to try
+> typing with the pointer on at the same time.
+
+A small native helper ([`native/titanpad.c`](native/titanpad.c)) reads the sensor's `/dev/input/eventN`
+device directly, so keys keep working while the pointer is on. It needs either:
+
+- **Root (Magisk):** choose *Root* in the app and approve the su prompt.
+- **ADB:** choose *ADB helper*, enable USB debugging, and after every reboot run the command shown in the
+  app from a computer (or `scripts/start-adb-helper.sh <token shown in the app>`). The helper listens only
+  on `127.0.0.1` and rejects clients without the app's random token.
+
+**Exclusive access** makes the helper grab the device (`EVIOCGRAB`) so Android stops reacting to the
+swipes too. **Calibrate area** limits the pointer to part of the device.
 
 ## Build
 
-Requirements: JDK 17+, the Android SDK (platform 34), and `aarch64-linux-gnu-gcc` (only needed to
-rebuild the helper).
+Requirements: JDK 17+, the Android SDK (platform 34), and `aarch64-linux-gnu-gcc` (only to rebuild the
+helper).
 
 ```sh
-native/build.sh              # rebuild the helper into app/src/main/jniLibs/arm64-v8a/libtitanpad.so
 ./gradlew testDebugUnitTest  # gesture engine unit tests
 ./gradlew assembleRelease    # app/build/outputs/apk/release/app-release.apk
+native/build.sh              # rebuild the helper into app/src/main/jniLibs/arm64-v8a/libtitanpad.so
 ```
 
-The release build is signed with the debug key so it can be installed directly.
+Builds are signed with `signing/titanpointer.keystore`, a throwaway key kept in the repo so every build
+can update an installed copy. Use your own key if you distribute it.
 
-## How it works
+## Code layout
 
 ```
-keyboard sensor ─► /dev/input/eventN ─► titanpad (root or adb shell) ─text─► PadLink
-   ─► TouchTracker (evdev MT protocol A/B) ─► GestureEngine ─► PointerService
-        ├─ overlay cursor (TYPE_ACCESSIBILITY_OVERLAY)
-        └─ dispatchGesture(): taps, long presses, and continued strokes for scroll and drag
+app/src/main/java/com/titanpointer/
+  PointerService     accessibility service: pointer overlay, focus window, keys, injected gestures
+  GestureEngine      single-finger touchpad gestures (unit tested)
+  GestureInjector    taps, long presses and continued strokes via dispatchGesture()
+  MainActivity       setup and settings screen
+  Diag               in-app diagnostics log
+  PadLink, TouchTracker, native/titanpad.c   root/ADB path (untested)
 ```
