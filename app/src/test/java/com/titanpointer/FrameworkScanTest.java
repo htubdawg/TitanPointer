@@ -16,6 +16,7 @@ public class FrameworkScanTest {
             int n;
             while ((n = in.read(buf)) > 0) o.write(buf, 0, n);
         }
+        Diag.setEnabled(true);
         Diag.clear();
         FrameworkScan.reportDex(o.toByteArray());
         String log = Diag.dump();

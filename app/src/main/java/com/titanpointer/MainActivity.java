@@ -57,7 +57,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = Prefs.get(this);
-        Diag.setEnabled(prefs.getBoolean(Prefs.DIAG, true));
+        Diag.setEnabled(prefs.getBoolean(Prefs.DIAG, false));
         link = PadLink.get(this);
         dp = getResources().getDisplayMetrics().density;
         DisplayMetrics dm = new DisplayMetrics();
@@ -174,24 +174,8 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
         // --- Advanced: root / ADB
         boolean helperMode = !Prefs.MODE_NOROOT.equals(prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT));
-        final TextView advHeader = new TextView(this);
-        advHeader.setTextSize(18);
-        advHeader.setTypeface(Typeface.DEFAULT_BOLD);
-        advHeader.setPadding(0, (int) (20 * dp), 0, (int) (6 * dp));
-        root.addView(advHeader);
         final LinearLayout advOuter = root;
-        final LinearLayout advBox = new LinearLayout(this);
-        advBox.setOrientation(LinearLayout.VERTICAL);
-        advOuter.addView(advBox);
-        final Runnable showAdv = () -> advHeader.setText((advBox.getVisibility() == View.VISIBLE ? "▾ " : "▸ ")
-                + "Advanced: root / ADB (untested)");
-        advBox.setVisibility(helperMode ? View.VISIBLE : View.GONE);
-        showAdv.run();
-        advHeader.setOnClickListener(v -> {
-            advBox.setVisibility(advBox.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-            showAdv.run();
-        });
-        root = advBox;
+        root = collapsible("Advanced: root / ADB (untested)", helperMode);
         hint("Not tested on a real Titan yet. Leave this on “No root” unless you want to experiment.");
         RadioGroup rg = new RadioGroup(this);
         RadioButton rNo = new RadioButton(this);
@@ -285,13 +269,14 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
         root = advOuter;
 
-        // --- Diagnostics
-        section("Diagnostics");
+        // --- Diagnostics (collapsed unless capturing is on)
+        final LinearLayout diagOuter = root;
+        root = collapsible("Diagnostics", prefs.getBoolean(Prefs.DIAG, false));
         hint("What the pointer saw recently: focus changes, which windows opened, keys and where they came from. "
                 + "If the pointer stops working somewhere, reproduce it, come back here and copy this.");
-        Switch diagSwitch = switchPref(Prefs.DIAG, "Capture diagnostics", true);
+        Switch diagSwitch = switchPref(Prefs.DIAG, "Capture diagnostics", false);
         diagSwitch.setOnCheckedChangeListener((v, on) -> {
-            if (prefs.getBoolean(Prefs.DIAG, true) != on) prefs.edit().putBoolean(Prefs.DIAG, on).apply();
+            if (prefs.getBoolean(Prefs.DIAG, false) != on) prefs.edit().putBoolean(Prefs.DIAG, on).apply();
             Diag.setEnabled(on);
             refresh();
         });
@@ -334,6 +319,30 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         dr.addView(clearDiag);
         root.addView(dr);
         diagButtons = dr;
+        root = diagOuter;
+    }
+
+    /**
+     * A section with a tap-to-expand header. Adds the header and an empty box to the current layout and
+     * returns the box; the caller fills it and then restores {@code root}.
+     */
+    private LinearLayout collapsible(final String title, boolean expanded) {
+        final TextView header = new TextView(this);
+        header.setTextSize(18);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        header.setPadding(0, (int) (20 * dp), 0, (int) (6 * dp));
+        root.addView(header);
+        final LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        root.addView(box);
+        final Runnable label = () -> header.setText((box.getVisibility() == View.VISIBLE ? "▾ " : "▸ ") + title);
+        box.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        label.run();
+        header.setOnClickListener(v -> {
+            box.setVisibility(box.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+            label.run();
+        });
+        return box;
     }
 
     private TextView diagText;

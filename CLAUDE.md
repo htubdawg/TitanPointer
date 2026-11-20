@@ -270,6 +270,11 @@ text. Unit tested on a d8-built dex (`FrameworkScanTest`, `src/test/resources/pr
   the reader's rule is native code (only strings visible), so how to avoid it is unknown. Only fix found: ADB shell (uid shell) can `setprop debug.sf.forcescroll_view no`
   before each click via the existing ADB helper (`native/titanpad.c serve`); offered to the user, not built.
 
+## v1.22
+Diagnostics capture is off by default (`Prefs.DIAG` default false, `Diag.enabled` starts false; the tap test
+screen and the software search switch it on themselves). The Diagnostics section is collapsible like Advanced
+(shared `MainActivity.collapsible()`), expanded only when capturing is on.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

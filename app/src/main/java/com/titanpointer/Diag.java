@@ -16,7 +16,7 @@ public final class Diag {
     private static final Map<String, Long> lastByKey = new HashMap<>();
     private static final SimpleDateFormat fmt = new SimpleDateFormat("HH:mm:ss.SSS", Locale.US);
 
-    private static volatile boolean enabled = true;
+    private static volatile boolean enabled = false;
 
     private Diag() {}
 

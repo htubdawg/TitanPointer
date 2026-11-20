@@ -52,7 +52,7 @@ public final class Prefs {
     public static final String TAP_DELAY_TEST = "tap_delay_test";
     /** Diagnostics test: the click key's click is sent from a timer instead of the key callback (off by default). */
     public static final String KEY_TIMER_TEST = "key_timer_test";
-    /** Capture the in-memory diagnostics log (on by default). */
+    /** Capture the in-memory diagnostics log (off by default). */
     public static final String DIAG = "diag";
     public static final String ADB_PORT = "adb_port", ADB_TOKEN = "adb_token";
 
