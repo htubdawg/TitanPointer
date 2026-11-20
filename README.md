@@ -7,12 +7,12 @@ touchpad with an on-screen mouse pointer. No root needed.
 > directed and tested by a human on a real Titan. Review it before you trust it with anything important.
 
 <p>
-  <img src="docs/images/settings-1.png" width="32%" alt="Settings: service status, pointer mode switch, no-root mode">
+  <img src="docs/images/settings-1.png" width="32%" alt="Settings: service status, pointer mode switch, how it works">
   <img src="docs/images/settings-2.png" width="32%" alt="Settings: pointer speed, acceleration, size">
   <img src="docs/images/settings-3.png" width="32%" alt="Settings: click, long-press and toggle keys">
 </p>
 
-<sub>The settings screen at the Titan's 1440 × 1440 resolution, with default settings. These are renderings of
+<sub>The settings screen (1.22) at the Titan's 1440 × 1440 resolution, with default settings. These are renderings of
 the app's layout (<code>docs/screenshots/</code>, made with <code>node docs/screenshots/render.js</code>), not
 captures from a phone.</sub>
 
@@ -25,6 +25,7 @@ captures from a phone.</sub>
 | Tap twice | Double tap |
 | Tap, then touch again and slide | Drag (press, hold and move at the pointer) |
 | Space, then slide | Scroll mode: slides scroll, taps never click |
+| Space, then flick | Fling: the page keeps scrolling and slows down (setting) |
 
 | Key (while pointer mode is on) | Action |
 |---|---|
@@ -44,13 +45,32 @@ captures from a phone.</sub>
 
 Hardware details (keyboard layout, sensor range, key codes): [docs/titan-hardware.md](docs/titan-hardware.md).
 
+## Known limitation: keyboard taps can't click standard Android buttons
+
+On the Titan, a tap on the keyboard surface doesn't click classic Android buttons and toolbars, including
+the address bars and toolbar buttons of Firefox and Chrome. **Use the click key (Enter) for those.** It
+works everywhere. Keyboard taps work on web pages and in apps built with Jetpack Compose.
+
+This is the Titan's own software, not TitanPointer. Its keyboard scrolling feature (the scroll assistant,
+which TitanPointer needs left on) sets the system property `debug.sf.forcescroll_view` to `yes` whenever the
+keyboard surface is touched, and only a real key press sets it back to `no`. While it's `yes`, the Titan's
+modified `View.onTouchEvent` refuses taps on standard views, so that keyboard scrolling doesn't press
+buttons. You can see it without TitanPointer: scroll a page in Firefox with the keyboard, then tap the
+address bar with your finger.
+
+Apps can't inject key presses or change `debug.*` properties, so this can't be fixed without root. An ADB
+shell could reset the property before each click; that isn't implemented. The full investigation is in
+[CLAUDE.md](CLAUDE.md).
+
 ## Install
 
-1. Install [`dist/TitanPointer-1.7.apk`](dist/TitanPointer-1.7.apk).
+1. Install [`dist/TitanPointer-1.22.apk`](dist/TitanPointer-1.22.apk).
 2. Open **TitanPointer** and turn on its accessibility service (Settings → Accessibility → TitanPointer).
    It draws the pointer, sends taps and swipes at the pointer, and reads key presses for the shortcuts.
    Nothing is collected or sent anywhere.
-3. Press **Alt + Space** and slide on the keyboard.
+3. Keep the Titan's keyboard scrolling (scroll assistant) turned on: without it the keyboard touches don't
+   reach TitanPointer.
+4. Press **Alt + Space** and slide on the keyboard.
 
 The app shows a minimal, silent notification while the service runs. It keeps Android from stopping the
 service when you swipe the app away; you can hide it in the notification settings.
@@ -67,8 +87,11 @@ turn it off (Alt + Space) to type. While pointer mode is on, the keyboard app (e
 is hidden and the text field loses focus, because otherwise the keyboard app receives the keyboard touches
 instead. Both are restored when you turn pointer mode off.
 
-If the pointer stops working somewhere, the **Diagnostics** section at the bottom of the app logs focus
-changes, windows and keys, and can be copied.
+If the pointer stops working somewhere, open the **Diagnostics** section at the bottom of the app
+(collapsed, and off by default), turn on **Capture diagnostics**, reproduce the problem and copy the log. It
+records focus changes, windows, keys and every click: where it went, what was under the pointer and what
+the app did with it. The section also has a tap test screen and a search of the phone's own software that
+were used to track down the limitation above.
 
 ## Root and ADB modes (untested)
 
@@ -76,7 +99,8 @@ changes, windows and keys, and can be copied.
 > typing with the pointer on at the same time.
 
 A small native helper ([`native/titanpad.c`](native/titanpad.c)) reads the sensor's `/dev/input/eventN`
-device directly, so keys keep working while the pointer is on. It needs either:
+device directly, so keys keep working while the pointer is on. Choose it in the collapsed **Advanced: root /
+ADB (untested)** section at the bottom of the app. It needs either:
 
 - **Root (Magisk):** choose *Root* in the app and approve the su prompt.
 - **ADB:** choose *ADB helper*, enable USB debugging, and after every reboot run the command shown in the
@@ -92,7 +116,7 @@ Requirements: JDK 17+, the Android SDK (platform 34), and `aarch64-linux-gnu-gcc
 helper).
 
 ```sh
-./gradlew testDebugUnitTest  # gesture engine unit tests
+./gradlew testDebugUnitTest  # gesture engine and diagnostics unit tests
 ./gradlew assembleRelease    # app/build/outputs/apk/release/app-release.apk
 native/build.sh              # rebuild the helper into app/src/main/jniLibs/arm64-v8a/libtitanpad.so
 ```
@@ -108,6 +132,8 @@ app/src/main/java/com/titanpointer/
   GestureEngine      single-finger touchpad gestures (unit tested)
   GestureInjector    taps, long presses and continued strokes via dispatchGesture()
   MainActivity       setup and settings screen
-  Diag               in-app diagnostics log
+  Diag               in-app diagnostics log (off by default)
+  ClickTrace         per-click diagnostics: timing, what's under the pointer, the app's response
+  TapTestActivity, StateProbe, FrameworkScan   tools used to find the Titan's tap block
   PadLink, TouchTracker, native/titanpad.c   root/ADB path (untested)
 ```
