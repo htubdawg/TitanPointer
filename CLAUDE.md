@@ -97,6 +97,12 @@ notification and a new channel `keepalive_hidden` (the old `keepalive` channel i
 settings can't change after creation). The user declined battery changes (screen-off auto-off, retry cap).
 
 ## Open items / ideas
+- **Planned: make TitanPointer a keyboard app (IME).** Agreed with the user as the fix for typing while
+  pointer mode is on in no-root mode. An IME gets the hardware keys while a text field is focused and can
+  commit text; the BlackBerry Keyboard already gets the pad's touches as an IME (it moves the text cursor
+  with them, and the v1.6 log showed it takes them from our focus window). Cost: replaces the BlackBerry
+  Keyboard (its predictions etc.).
+- Agreed next: fling (momentum) scrolling; move root/ADB settings under an "Advanced" heading.
 - Confirm the 22% top-row cut-off and raw Y direction on the phone.
 - Root/ADB path: confirm `/dev/input` names/ranges on a real Titan and test the grab behavior.
 - The test page artifact (Titan Keyboard Probe): https://claude.ai/artifact/3YTvp88ubTZ1kfVoHWsXP3
