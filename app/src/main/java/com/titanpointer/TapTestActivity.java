@@ -37,7 +37,7 @@ public final class TapTestActivity extends Activity {
         dp = getResources().getDisplayMetrics().density;
         Diag.setEnabled(true);
 
-        LinearLayout root = new LinearLayout(this);
+        LinearLayout root = new LogGroup("screen layout");
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.WHITE);
 
@@ -68,9 +68,16 @@ public final class TapTestActivity extends Activity {
         help.setText("1. Turn pointer mode on, put the pointer on the fake address bar.\n"
                 + "2. Tap the keyboard once. Wait 2 s.\n"
                 + "3. Press Enter once. Wait 2 s.\n"
-                + "4. Turn pointer mode off and tap “Copy log” with your finger.\n\n"
+                + "4. Do the same on the orange bare view below.\n"
+                + "5. Turn pointer mode off and tap “Copy log” with your finger.\n\n"
                 + "Each element fades for a moment when it registers a click.");
         root.addView(help);
+
+        RawTarget raw = new RawTarget();
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                (int) (48 * dp));
+        rlp.setMargins(p * 2, p, p * 2, p);
+        root.addView(raw, rlp);
 
         LogText plain = new LogText("plain button", false);
         plain.setText("Plain button (for comparison)");
@@ -186,6 +193,100 @@ public final class TapTestActivity extends Activity {
         return sb.toString();
     }
 
+    /** Every check standard Android applies before a view gets a touch, as this phone answers them. */
+    @android.annotation.SuppressLint("SoonBlockedPrivateApi") // diagnostics only; caught if refused
+    static void logGates(View v, String name, MotionEvent e) {
+        StringBuilder sb = new StringBuilder("  " + name + " checks for DOWN:");
+        sb.append(" flags=0x").append(Integer.toHexString(e.getFlags()));
+        sb.append(" targetsA11yFocus=").append((e.getFlags() & 0x40000000) != 0);
+        sb.append(" securityFilter=").append(v.onFilterTouchEventForSecurity(e) ? "pass" : "BLOCK");
+        sb.append(" filterWhenObscured=").append(v.getFilterTouchesWhenObscured());
+        sb.append(" enabled=").append(v.isEnabled());
+        sb.append(" clickable=").append(v.isClickable());
+        sb.append(" longClickable=").append(v.isLongClickable());
+        sb.append(" attached=").append(v.isAttachedToWindow());
+        sb.append(" shown=").append(v.isShown());
+        try {
+            java.lang.reflect.Method m = View.class.getDeclaredMethod("isAccessibilityFocusedViewOrHost");
+            m.setAccessible(true);
+            sb.append(" a11yFocused=").append(m.invoke(v));
+        } catch (Throwable t) {
+            sb.append(" a11yFocused=?");
+        }
+        log(sb.toString());
+    }
+
+    /** The screen's own layout: logs whether it intercepts the touch and whether a child took it. */
+    private final class LogGroup extends LinearLayout {
+        private final String name;
+
+        LogGroup(String name) {
+            super(TapTestActivity.this);
+            this.name = name;
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent e) {
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) logGates(this, name, e);
+            boolean r = super.dispatchTouchEvent(e);
+            if (e.getActionMasked() != MotionEvent.ACTION_MOVE) {
+                log("  " + name + " dispatch " + MotionEvent.actionToString(e.getAction()).replace("ACTION_", "")
+                        + " -> " + r);
+            }
+            return r;
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent e) {
+            boolean r = super.onInterceptTouchEvent(e);
+            if (e.getActionMasked() != MotionEvent.ACTION_MOVE) {
+                log("  " + name + " intercept " + MotionEvent.actionToString(e.getAction())
+                        .replace("ACTION_", "") + " -> " + r);
+            }
+            return r;
+        }
+    }
+
+    /** A bare view (not a text or button) that accepts every touch, to compare with the text elements. */
+    private final class RawTarget extends View {
+        RawTarget() {
+            super(TapTestActivity.this);
+            setBackgroundColor(0xFFFFE0B2);
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent e) {
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) logGates(this, "bare view", e);
+            boolean r = super.dispatchTouchEvent(e);
+            if (e.getActionMasked() != MotionEvent.ACTION_MOVE) {
+                log("  bare view got " + MotionEvent.actionToString(e.getAction()).replace("ACTION_", "")
+                        + " handled=" + r);
+            }
+            return r;
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            if (e.getActionMasked() != MotionEvent.ACTION_MOVE) {
+                log("  bare view onTouchEvent reached (" + MotionEvent.actionToString(e.getAction())
+                        .replace("ACTION_", "") + ")");
+            }
+            if (e.getActionMasked() == MotionEvent.ACTION_UP) {
+                setAlpha(0.4f);
+                postDelayed(() -> setAlpha(1f), 300);
+            }
+            return true;
+        }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas c) {
+            super.onDraw(c);
+            android.graphics.Paint pt = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            pt.setTextSize(14 * dp);
+            c.drawText("Bare view (not a button, takes every touch)", 8 * dp, 30 * dp, pt);
+        }
+    }
+
     /** A clickable text that logs everything that happens to it. */
     private final class LogText extends TextView {
         private final String name;
@@ -214,10 +315,21 @@ public final class TapTestActivity extends Activity {
 
         @Override
         public boolean dispatchTouchEvent(MotionEvent e) {
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) logGates(this, name, e);
             boolean r = super.dispatchTouchEvent(e);
             if (e.getActionMasked() != MotionEvent.ACTION_MOVE) {
                 log("  " + name + " got " + MotionEvent.actionToString(e.getAction()).replace("ACTION_", "")
                         + " handled=" + r + " pressed=" + isPressed());
+            }
+            return r;
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            boolean r = super.onTouchEvent(e);
+            if (e.getActionMasked() != MotionEvent.ACTION_MOVE) {
+                log("  " + name + " onTouchEvent reached (" + MotionEvent.actionToString(e.getAction())
+                        .replace("ACTION_", "") + ") -> " + r);
             }
             return r;
         }

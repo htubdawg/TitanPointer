@@ -185,6 +185,17 @@ source, tool, flags incl. obscured bits, batching, meta/buttons, classification)
 dispatch result, pressed changes, performClick/performLongClick, focus and touch-mode changes. Goal: see
 what a window receives for a keyboard-tap click vs an Enter click. Waiting on the user's log.
 
+## v1.17
+**1.16 reproduced it in our own app**: identical injected DOWN/UP (dev=0 src=0x1002 tool=0 flags=0x0, 1–7 ms
+latency) reached the test window both times; on keyboard-tap clicks the clickable TextView's
+`dispatchTouchEvent` returned false at DOWN (never pressed, onTouchEvent apparently not reached); on Enter
+clicks it was pressed and clicked. Stock Android 10 `View.dispatchTouchEvent` can only refuse a clickable
+view's touch via FLAG_TARGET_ACCESSIBILITY_FOCUS or the obscured filter, and flags were 0, so the Titan's
+framework likely differs. User: **every** element on the test screen failed with pad taps (not position).
+1.17 logs each gate at DOWN (flags, a11y-focus flag, securityFilter, enabled/clickable, a11y focus via
+reflection), whether onTouchEvent is reached, the root layout's intercept/dispatch, and adds a bare View
+that returns true from onTouchEvent. Waiting on the user's log.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).
