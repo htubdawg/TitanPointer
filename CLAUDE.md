@@ -264,9 +264,10 @@ text. Unit tested on a d8-built dex (`FrameworkScanTest`, `src/test/resources/pr
   `persist.sys.forcescroll_package_name`, which `libinputflinger.so` reads (with `ro.agui.touchpad_function`,
   `persist.sys.touchpad_switch`). That's the per-app forced scrolling (pad → fake touches).
 - `/product/app/AguiLEDSettings` `TouchpadActivity` edits the list and Settings.Global `touchpad_switch(_value)`.
-- So the earlier claim "TitanPointer's focus window turns the switch on" is probably wrong; Chrome's address
-  bar likely just doesn't use the blocked View code. The user's Chrome+pointer test was on 1.19 (held taps),
-  so it doesn't count. Only fix found: ADB shell (uid shell) can `setprop debug.sf.forcescroll_view no`
+- Correction: keyboard taps on Chrome's address bar already failed back at 1.13 (not just on 1.19), while a
+  finger tap after keyboard scrolling works in Chrome alone, and the 1.20 log showed the switch `yes` with
+  TitanPointer in front of Chrome. So TitanPointer's focus window does make the input reader set the switch;
+  the reader's rule is native code (only strings visible), so how to avoid it is unknown. Only fix found: ADB shell (uid shell) can `setprop debug.sf.forcescroll_view no`
   before each click via the existing ADB helper (`native/titanpad.c serve`); offered to the user, not built.
 
 ## Open items / ideas
