@@ -208,6 +208,16 @@ fields, static fields of view/input classes, IMM/InputManager instance fields, g
 System/Global/Secure (hidden API exemption via meta-reflection, Android 10), and logs the diff from the
 previous touch labelled ACCEPTED/REFUSED. Diag keeps 2000 lines. Waiting on the user's log.
 
+## Root cause found (1.18 log)
+The system property **`debug.sf.forcescroll_view`** is `yes` at every refused pad-tap click and `no` at every
+accepted Enter click (nothing else flips). It's the Titan's keyboard-scroll feature: a keyboard-surface touch
+sets it to `yes`, a key press sets it to `no`, and the Titan's modified `View.onTouchEvent` refuses touches
+while it's `yes` (Compose/web content don't use that code, so they work). Apps can't set `debug.*`
+properties (SELinux), so no-root TitanPointer can't reset it directly; root/ADB could (`setprop`). Next:
+the user checks whether turning off the Titan's keyboard scrolling (Titan 2 calls it "Scroll assistant",
+with a per-app "force" list; the original Titan's menu path is unconfirmed) keeps it `no` while the pad still
+reaches TitanPointer. Possible app change: show a warning when the property is `yes`.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).
