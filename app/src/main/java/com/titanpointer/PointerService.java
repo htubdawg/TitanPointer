@@ -42,6 +42,7 @@ public final class PointerService extends AccessibilityService
     private CursorView cursor;
     private WindowManager.LayoutParams lp;
     private GestureInjector injector;
+    private ClickTrace trace;
     private GestureEngine engine;
     private TouchTracker tracker;
 
@@ -69,6 +70,7 @@ public final class PointerService extends AccessibilityService
         link = PadLink.get(this);
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         injector = new GestureInjector(this);
+        trace = new ClickTrace(this, main);
         engine = new GestureEngine(this, SystemClock::uptimeMillis, new GestureEngine.Scheduler() {
             @Override
             public void post(Runnable r, long delayMs) {
@@ -161,51 +163,12 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
-            onViewFocused(event);
-            return;
-        }
+        if (trace != null) trace.onEvent(event);
         if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
         String w = event.getPackageName() + "/" + event.getClassName();
         if (w.equals(foreground)) return;
         foreground = w;
         if (active) Diag.log("window: " + w);
-    }
-
-    // ---- Clicking into a text field ----
-
-    /** When the last click was injected (uptime ms). */
-    private long lastClickAt = Long.MIN_VALUE / 2;
-    /** A text field that gets focus this soon after a click was clicked into. */
-    private static final long CLICK_FOCUS_MS = 1500;
-
-    private boolean clickedIntoTextFieldRecently() {
-        return active && isNoRoot(prefs) && prefs.getBoolean(Prefs.CLICK_EXIT, true)
-                && SystemClock.uptimeMillis() - lastClickAt < CLICK_FOCUS_MS;
-    }
-
-    /**
-     * In no-root mode our focus window takes every key, so a text field you click into can't be typed
-     * in, and some (Firefox's URL bar opens its own search window) close when they can't get focus.
-     * Turn pointer mode off instead so the field gets focus and the keys.
-     */
-    private void onViewFocused(AccessibilityEvent event) {
-        if (!clickedIntoTextFieldRecently()) return;
-        android.view.accessibility.AccessibilityNodeInfo s = event.getSource();
-        boolean editable = s != null && s.isEditable();
-        if (!editable) {
-            android.view.accessibility.AccessibilityNodeInfo f =
-                    findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT);
-            editable = f != null && f.isEditable();
-        }
-        if (!editable) return;
-        exitForTextField(String.valueOf(event.getPackageName()));
-    }
-
-    private void exitForTextField(String pkg) {
-        Diag.log("clicked into a text field (" + pkg + "): pointer mode off for typing");
-        lastClickAt = Long.MIN_VALUE / 2;
-        setPointerMode(false);
     }
 
     /** Last window reported by accessibility events, for the diagnostics log. */
@@ -263,6 +226,8 @@ public final class PointerService extends AccessibilityService
         link.setOpen(OWNER, false);
         main.removeCallbacks(autoHide);
         main.removeCallbacks(liftScroll);
+        main.removeCallbacks(delayedPadClick);
+        trace.reset();
         scrollHeld = false;
         if (cursor != null) cursor.setState(CursorView.STATE_NORMAL);
         setCursorVisible(false);
@@ -406,15 +371,6 @@ public final class PointerService extends AccessibilityService
 
     private final Runnable regainFocus = () -> {
         if (!active || !usingCatcher || catcherFocused) return;
-        if (clickedIntoTextFieldRecently()) {
-            // The click opened a window with a text field (e.g. Firefox's search): let it keep the focus.
-            android.view.accessibility.AccessibilityNodeInfo f =
-                    findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT);
-            if (f != null && f.isEditable()) {
-                exitForTextField(String.valueOf(f.getPackageName()));
-                return;
-            }
-        }
         android.app.KeyguardManager km = getSystemService(android.app.KeyguardManager.class);
         if (km != null && km.isKeyguardLocked()) {
             Diag.log("screen locked: not taking focus back");
@@ -478,6 +434,8 @@ public final class PointerService extends AccessibilityService
             }
         }
         int action = e.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) trace.padDown();
+        else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) trace.padUp();
         contacts.clear();
         if (action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL) {
             int skip = action == MotionEvent.ACTION_POINTER_UP ? e.getActionIndex() : -1;
@@ -500,7 +458,7 @@ public final class PointerService extends AccessibilityService
             return true;
         }
         if (matches(event, Prefs.CLICK_KEY, Prefs.DEFAULT_CLICK_KEY, Prefs.CLICK_META, Prefs.DEFAULT_CLICK_META)) {
-            if (down && event.getRepeatCount() == 0) onClick();
+            if (down && event.getRepeatCount() == 0) click("click key", false);
             return true;
         }
         switch (k) {
@@ -675,13 +633,25 @@ public final class PointerService extends AccessibilityService
         if (dragging) injector.streamTo(px, py);
     }
 
+    /** Click from the touchpad (tap). */
     @Override
     public void onClick() {
         if (!active) return;
+        if (prefs.getBoolean(Prefs.TAP_DELAY_TEST, false)) {
+            main.postDelayed(delayedPadClick, 1000);
+            return;
+        }
+        click("tap on keyboard", true);
+    }
+
+    private final Runnable delayedPadClick = () -> click("tap on keyboard, delayed 1 s for testing", true);
+
+    private void click(String source, boolean fromPad) {
+        if (!active) return;
         setCursorVisible(true);
         flash();
-        lastClickAt = SystemClock.uptimeMillis();
-        injector.tap(px, py);
+        final int n = trace.click(source, fromPad, px, py);
+        injector.tap(px, py, Diag.isEnabled() ? what -> trace.tapResult(n, what) : null);
     }
 
     private void onLongPress() {

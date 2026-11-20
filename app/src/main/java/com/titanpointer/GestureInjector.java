@@ -58,18 +58,31 @@ public final class GestureInjector {
         return streaming;
     }
 
+    /** What happened to an injected tap, for diagnostics. */
+    public interface Result {
+        void on(String what);
+    }
+
     public void tap(float x, float y) {
-        discrete(x, y, 40);
+        tap(x, y, null);
+    }
+
+    public void tap(float x, float y, Result r) {
+        discrete(x, y, 40, r);
     }
 
     public void longPress(float x, float y) {
-        discrete(x, y, 650);
+        discrete(x, y, 650, null);
     }
 
-    private void discrete(final float x, final float y, final long duration) {
-        if (!enabled) return;
+    private void discrete(final float x, final float y, final long duration, final Result r) {
+        if (!enabled) {
+            if (r != null) r.on("dropped: pointer mode off");
+            return;
+        }
         if (streaming || inFlight) {
-            queue.add(() -> discrete(x, y, duration));
+            if (r != null) r.on("queued behind a gesture in progress");
+            queue.add(() -> discrete(x, y, duration, r));
             return;
         }
         Path p = new Path();
@@ -77,10 +90,12 @@ public final class GestureInjector {
         GestureDescription g = new GestureDescription.Builder()
                 .addStroke(new GestureDescription.StrokeDescription(p, 0, duration)).build();
         inFlight = true;
-        boolean ok = svc.dispatchGesture(g, new GestureResult(), null);
+        if (r != null) r.on("sent: " + Math.round(cx(x)) + ", " + Math.round(cy(y)) + " for " + duration + " ms");
+        boolean ok = svc.dispatchGesture(g, new GestureResult(r), null);
         if (!ok) {
             inFlight = false;
             Log.w(TAG, "dispatchGesture refused");
+            if (r != null) r.on("REFUSED by Android");
             drainQueue();
         }
     }
@@ -219,15 +234,23 @@ public final class GestureInjector {
     }
 
     private final class GestureResult extends AccessibilityService.GestureResultCallback {
+        private final Result r;
+
+        GestureResult(Result r) {
+            this.r = r;
+        }
+
         @Override
         public void onCompleted(GestureDescription d) {
             inFlight = false;
+            if (r != null) r.on("completed");
             drainQueue();
         }
 
         @Override
         public void onCancelled(GestureDescription d) {
             inFlight = false;
+            if (r != null) r.on("CANCELLED by Android");
             drainQueue();
         }
     }

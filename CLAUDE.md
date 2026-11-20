@@ -114,15 +114,26 @@ the notification off. The user confirmed the v1.7 notes-app fix and the top-row 
   unnumbered) moved to a collapsible "Advanced: root / ADB (untested)" section above Diagnostics, expanded
   only if the mode is already root/adb. Section 2 is now "How it works" (shows a note when a helper mode is on).
 
-## v1.11
-User: in no-root mode, clicking couldn't open Firefox's URL bar, but text fields inside web pages worked.
-Likely cause, not confirmed with a log: Fenix's URL bar opens a separate search window (a DialogFragment),
-which can't take focus from our catcher or loses it when focus recovery takes it back. Fix: a click
-(`lastClickAt`, the click key or a tap) followed within 1.5 s by an editable field getting input focus
-(TYPE_VIEW_FOCUSED, now in the service config; notificationTimeout lowered 1000 → 100 ms) turns pointer mode
-off so the field gets focus and the keys. `regainFocus` checks the same thing before taking focus back.
-Setting `Prefs.CLICK_EXIT` (default on) in "How it works". Long press doesn't count (text selection
-menus). Logged in Diag ("clicked into a text field"). If the URL bar still fails, ask for the Diag log.
+## v1.11 (reverted in 1.12) and the Firefox URL bar investigation
+Bug: in Firefox the URL bar ignores a **tap on the keyboard surface**, but the **click key (Enter) works** on
+it, and pad taps work everywhere else (web page fields, other apps). Turning tap-drag off didn't help.
+Both paths end in the identical `injector.tap(px, py)` (40 ms tap), so the difference comes from outside
+our code, around the keyboard touch. 1.11 guessed a focus problem (auto-exit on text field focus): wrong,
+removed in 1.12. Checked in Firefox's source (mozilla-firefox/firefox main, Nov 2026; searchfox is
+blocked here, but a sparse `git clone` of github.com works): the URL bar is a plain Compose `clickable`/
+`combinedClickable` (`compose/browser-toolbar/.../ui/Origin.kt`; old View toolbar `OriginView.kt` uses
+setOnClickListener). A click opens the search/home screen. `filterTouchesWhenObscured` is only used in
+`NoObscuredTouchesDialogFragment` (permission, add-on, prompt dialogs), not the toolbar. `SwipeGestureLayout`
+only takes swipes. **Don't guess again: read the 1.12 log.**
+
+## v1.12: click diagnostics
+`ClickTrace` (only while Diag is on): each click logs source (tap on keyboard / click key), pad touch
+duration and time since lift, the windows at the point and the deepest element there (needs
+flagRetrieveInteractiveWindows, added), the injected tap's fate (sent/queued/completed/CANCELLED/REFUSED via
+a `GestureInjector.Result` callback), and for 2 s every accessibility event from other apps (event types are
+widened to all with setServiceInfo during the watch, then restored; content changes only counted). A
+handled click shows as VIEW_CLICKED from Firefox. Test switch `Prefs.TAP_DELAY_TEST` (Diagnostics,
+default off) delays pad-tap clicks by 1 s. Waiting on the user's log: tap vs Enter on the URL bar.
 
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
