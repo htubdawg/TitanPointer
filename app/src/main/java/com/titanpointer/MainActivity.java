@@ -56,6 +56,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = Prefs.get(this);
+        Diag.setEnabled(prefs.getBoolean(Prefs.DIAG, true));
         link = PadLink.get(this);
         dp = getResources().getDisplayMetrics().density;
         DisplayMetrics dm = new DisplayMetrics();
@@ -262,6 +263,12 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         section("Diagnostics");
         hint("What the pointer saw recently: focus changes, which windows opened, keys and where they came from. "
                 + "If the pointer stops working somewhere, reproduce it, come back here and copy this.");
+        Switch diagSwitch = switchPref(Prefs.DIAG, "Capture diagnostics", true);
+        diagSwitch.setOnCheckedChangeListener((v, on) -> {
+            if (prefs.getBoolean(Prefs.DIAG, true) != on) prefs.edit().putBoolean(Prefs.DIAG, on).apply();
+            Diag.setEnabled(on);
+            refresh();
+        });
         diagText = text("");
         diagText.setTypeface(Typeface.MONOSPACE);
         diagText.setTextSize(11);
@@ -284,9 +291,11 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         dr.addView(copyDiag);
         dr.addView(clearDiag);
         root.addView(dr);
+        diagButtons = dr;
     }
 
     private TextView diagText;
+    private View diagButtons;
 
     private void finishCalibration(boolean save) {
         if (calibrateButton.getTag() == null) return;
@@ -390,7 +399,12 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 prefs.getInt(Prefs.ZONE_XMAX, 0), prefs.getInt(Prefs.ZONE_YMIN, 0), prefs.getInt(Prefs.ZONE_YMAX, 0)} : null);
 
         for (Runnable r : keyLabels) r.run();
-        if (diagText != null) diagText.setText(Diag.dump());
+        if (diagText != null) {
+            boolean on = Diag.isEnabled();
+            diagText.setText(Diag.dump());
+            diagText.setVisibility(on ? View.VISIBLE : View.GONE);
+            diagButtons.setVisibility(on ? View.VISIBLE : View.GONE);
+        }
     }
 
     private String adbCommandText() {

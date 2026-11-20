@@ -46,6 +46,8 @@ public final class Prefs {
     public static final int DEFAULT_CLICK_KEY = android.view.KeyEvent.KEYCODE_ENTER, DEFAULT_CLICK_META = 0;
     public static final int DEFAULT_LONG_KEY = android.view.KeyEvent.KEYCODE_ENTER;
     public static final int DEFAULT_LONG_META = android.view.KeyEvent.META_ALT_ON;
+    /** Capture the in-memory diagnostics log (on by default). */
+    public static final String DIAG = "diag";
     public static final String ADB_PORT = "adb_port", ADB_TOKEN = "adb_token";
 
     private Prefs() {}

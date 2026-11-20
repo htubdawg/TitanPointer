@@ -85,6 +85,7 @@ public final class PointerService extends AccessibilityService
         px = screenW / 2f;
         py = screenH / 2f;
         createCursor();
+        Diag.setEnabled(prefs.getBoolean(Prefs.DIAG, true));
         prefs.registerOnSharedPreferenceChangeListener(this);
         link.addListener(this);
         if (prefs.getBoolean(Prefs.ENABLED, true)) activate();
@@ -491,6 +492,9 @@ public final class PointerService extends AccessibilityService
     public void onSharedPreferenceChanged(SharedPreferences p, String key) {
         if (key == null) return;
         switch (key) {
+            case Prefs.DIAG:
+                Diag.setEnabled(p.getBoolean(Prefs.DIAG, true));
+                break;
             case Prefs.ENABLED: // from the app's switch or the Quick Settings tile
                 if (p.getBoolean(Prefs.ENABLED, true)) activate();
                 else deactivate();
