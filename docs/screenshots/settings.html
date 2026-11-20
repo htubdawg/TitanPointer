@@ -69,7 +69,7 @@
   <div class="scroll" id="scroll"><div class="content" id="content"></div></div>
 </div>
 <script>
-  // Mirrors MainActivity.build() (no-root mode: the root/ADB box and sections 3-4 are hidden).
+  // Mirrors MainActivity.build() as of 1.22 (no-root mode; Advanced and Diagnostics collapsed).
   const c = document.getElementById('content');
   const add = (html) => c.insertAdjacentHTML('beforeend', html);
   const section = (t) => add(`<div class="section">${t}</div>`);
@@ -91,10 +91,7 @@
   sw('Pointer mode', true);
   hint('Toggle with Alt + Space (change it under Keys), or the Quick Settings tile “Keyboard pointer”.');
 
-  section('2. How to read the keyboard');
-  radio('No root (recommended)', true);
-  radio('Root (su): typing and pointer at the same time', false);
-  radio('ADB helper: like root, started from a computer', false);
+  section('2. How it works');
   hint('The Titan reports keyboard touches only to the app that has keyboard focus, so while pointer mode is on, TitanPointer holds the focus. Keys can’t reach the app underneath until you turn it off.');
   text('• Slide: move the pointer · Tap: click\n• Enter: click · Alt + Enter: long press (change under Keys)\n• Space: scroll mode on/off\n• Alt + Space: pointer mode on/off');
   spinner('Letter keys in pointer mode', 'Do nothing');
@@ -123,6 +120,8 @@
   hint('In scroll mode, slides scroll and taps never click.');
   seek('Scroll speed', 2, 60, 15, x);
   sw('Reverse scroll direction', false);
+  sw('Fling: a quick flick keeps scrolling', true);
+  hint('Flick and lift while still moving to keep scrolling; stop before lifting to stop dead.');
 
   section('Keys');
   keyBinding('Pointer mode on/off', 'Alt + Space');
@@ -134,14 +133,8 @@
   section('Gestures');
   text('• Slide: move the pointer\n• Tap: click (tap)\n• Tap twice: double tap\n• Tap, then touch again and move: drag\n• Space, then slide: scroll\n• Typing is ignored automatically');
 
-  section('Diagnostics');
-  hint('What the pointer saw recently: focus changes, which windows opened, keys and where they came from. If the pointer stops working somewhere, reproduce it, come back here and copy this.');
-  add(`<div class="mono">00:03:41.111  pointer mode ON (no root)
-00:03:41.120  keyboard app hidden for pointer mode: ok
-00:03:41.133  focus window added
-00:03:41.176  focus window HAS keyboard focus
-00:03:41.465  touchpad event reached the focus window</div>`);
-  add(`<div class="row">${button('Copy')}${button('Clear')}</div>`);
+  section('▸ Advanced: root / ADB (untested)');
+  section('▸ Diagnostics');
 </script>
 </body>
 </html>
