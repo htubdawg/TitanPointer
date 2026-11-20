@@ -218,7 +218,11 @@ while it's `yes` (Compose/web content don't use that code, so they work). Apps c
 properties (SELinux), so no-root TitanPointer can't reset it directly; root/ADB could (`setprop`). The
 scroll assistant can't be turned off (the pointer needs it). **v1.19**: a keyboard-tap click is held while
 the property reads `yes` (read via SystemProperties.get reflection), polling every 20 ms up to 3 s, then
-clicks at the tap position; logs how long it waited or that it stayed `yes`. If it never resets by itself,
+clicks at the tap position; logs how long it waited or that it stayed `yes`. **Result: it never resets without a key
+press** (every held click only went through right after an Enter), so taps did nothing; reverted in 1.20
+(clicks go out immediately again; the log still shows the switch value). Likely purpose: the scroll
+assistant turns keyboard swipes into fake screen touches (device 0, like accessibility taps), and the
+switch stops those from clicking; real finger touches (device 4) aren't affected. If it never resets by itself,
 no-root can't fix this; the click key remains the workaround.
 
 ### Truth table (keep this; don't make the user repeat results)

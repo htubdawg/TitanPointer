@@ -677,6 +677,13 @@ public final class PointerService extends AccessibilityService
     }
 
     private void clickWhenTitanScrollOff(final String source) {
+        // 1.19 held the click until the switch read "no", but it never resets without a key press, so
+        // taps did nothing. Click right away (the log still records the switch's value).
+        click(source, true);
+    }
+
+    @SuppressWarnings("unused")
+    private void clickWhenTitanScrollOffHeld(final String source) {
         cancelScrollWait();
         if (!"yes".equals(titanScrollProp())) {
             click(source, true);
