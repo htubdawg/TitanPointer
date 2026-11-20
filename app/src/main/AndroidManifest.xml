@@ -29,6 +29,11 @@
             android:exported="false"
             android:label="Keyboard input probe" />
 
+        <activity
+            android:name=".TapTestActivity"
+            android:exported="false"
+            android:label="Tap test" />
+
         <service
             android:name=".PointerService"
             android:exported="true"

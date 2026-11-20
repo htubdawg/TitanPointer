@@ -176,6 +176,15 @@ claim "a plain tap affects the next click": the scroll-mode test contradicts it.
 workaround: the click key.
 Don't reopen unless the user asks.
 
+## v1.16: tap test screen
+Reopened at the user's request. User insists key presses never create double taps (don't argue it again).
+`TapTestActivity` (Diagnostics → "Open tap test screen"): a browser-like top toolbar (clickable,
+long-clickable "address bar" TextView + tab counter + menu), a plain button and a button in a ScrollView.
+Logs to Diag with "[test]": every MotionEvent the window gets (action, latency since eventTime, device,
+source, tool, flags incl. obscured bits, batching, meta/buttons, classification), each element's
+dispatch result, pressed changes, performClick/performLongClick, focus and touch-mode changes. Goal: see
+what a window receives for a keyboard-tap click vs an Enter click. Waiting on the user's log.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).
