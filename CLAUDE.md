@@ -254,6 +254,21 @@ jar/apk dex entries), parses dex (also embedded in vdex/odex/oat) to log every m
 string plus one level of callers, with the strings, fields and calls in each; native/config hits log nearby
 text. Unit tested on a d8-built dex (`FrameworkScanTest`, `src/test/resources/probe.dex`). Waiting on the log.
 
+## 1.21 scan result: how the phone does it
+- `framework.jar` `View.onTouchEvent` and `View.performButtonActionOnTouchDown` read
+  `SystemProperties.get("debug.sf.forcescroll_view")` ("yes" → refuse). MediaTek debug hooks around them.
+- `libinputreader.so` is the only other user of `debug.sf.forcescroll_view`: the system's input reader sets it
+  (keyboard touch → yes, key → no), apparently not per app.
+- `services.jar` `WindowManagerService$H.handleMessage` (focus change, `updateFocusedWindowLocked`) reads
+  Settings.Global `touchpad_force_scroll_app` (comma list; Firefox) and writes
+  `persist.sys.forcescroll_package_name`, which `libinputflinger.so` reads (with `ro.agui.touchpad_function`,
+  `persist.sys.touchpad_switch`). That's the per-app forced scrolling (pad → fake touches).
+- `/product/app/AguiLEDSettings` `TouchpadActivity` edits the list and Settings.Global `touchpad_switch(_value)`.
+- So the earlier claim "TitanPointer's focus window turns the switch on" is probably wrong; Chrome's address
+  bar likely just doesn't use the blocked View code. The user's Chrome+pointer test was on 1.19 (held taps),
+  so it doesn't count. Only fix found: ADB shell (uid shell) can `setprop debug.sf.forcescroll_view no`
+  before each click via the existing ADB helper (`native/titanpad.c serve`); offered to the user, not built.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).
