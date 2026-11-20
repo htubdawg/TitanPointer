@@ -89,7 +89,7 @@ screen) and the cursor fades while unfocused. Ask the user for the copied log fr
 The v1.6 log showed the cause: with the BlackBerry Keyboard up, the focus window keeps focus but gets no
 touchpad events. Pointer mode now hides the keyboard app (SHOW_MODE_HIDDEN) and clears the focused text
 field (needs canRetrieveWindowContent, added to the service config); both are undone when it goes off
-(focus is put back only if no other field took it). Logged in Diag. Not yet confirmed on the phone.
+(focus is put back only if no other field took it). Logged in Diag. Works on the phone (user, v1.9).
 
 ## v1.8
 The foreground notification showed on the user's lock screen. It's now VISIBILITY_SECRET on both the
@@ -103,6 +103,6 @@ settings can't change after creation). The user declined battery changes (screen
   with them, and the v1.6 log showed it takes them from our focus window). Cost: replaces the BlackBerry
   Keyboard (its predictions etc.).
 - Agreed next: fling (momentum) scrolling; move root/ADB settings under an "Advanced" heading.
-- Confirm the 22% top-row cut-off and raw Y direction on the phone.
+- The 22% top-row cut-off and Y direction work for the user (v1.9).
 - Root/ADB path: confirm `/dev/input` names/ranges on a real Titan and test the grab behavior.
 - The test page artifact (Titan Keyboard Probe): https://claude.ai/artifact/3YTvp88ubTZ1kfVoHWsXP3
