@@ -169,8 +169,11 @@ toolbar taps when the toolbar view isn't VISIBLE, but that would hit Enter too. 
 clicks from inside `onKeyEvent`, pad taps from a Handler. Test switch `Prefs.KEY_TIMER_TEST` sends the click
 key's click via `main.post` (no delay). If Enter then fails on the toolbar, that's the cause.
 **Result: no difference** (Enter via main.post still works). So TitanPointer sends the identical tap
-from the identical context either way; what differs is only the physical action before it (a stationary
-keyboard tap, with no key press or slide between it and the click). Unexplained; workaround: the click key.
+from the identical context either way. **No explanation fits all the user's results**: Enter works with
+nothing before it, right after a slide, right after a plain (scroll-mode) tap, and while a finger is moving
+on the pad; clicks produced by a pad tap fail (with or without the drag wait, with a 1 s delay). Don't
+claim "a plain tap affects the next click": the scroll-mode test contradicts it. Cause unknown;
+workaround: the click key.
 Don't reopen unless the user asks.
 
 ## Open items / ideas
