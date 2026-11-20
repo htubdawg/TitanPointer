@@ -245,6 +245,15 @@ Titan's View.onTouchEvent refuses taps on standard Views while it's yes.
 No-root can't inject keys or set debug.* props; root/ADB mode could `setprop debug.sf.forcescroll_view no`
 before each click (not implemented).
 
+## v1.21: find how the phone decides
+1.20 log in Chrome with pointer mode: the switch DOES turn on (Chrome alone keeps it off; Firefox is the only
+app on the scroll assistant's forced list), so TitanPointer's focus window triggers it. Any key, incl. Shift,
+resets it. `FrameworkScan` (Diagnostics → "Search phone software for the scroll switch"): streams files under
+/system, /system_ext, /product, /vendor, /odm for "forcescroll"/"force_scroll"/"forceScroll" (also inside
+jar/apk dex entries), parses dex (also embedded in vdex/odex/oat) to log every method that loads such a
+string plus one level of callers, with the strings, fields and calls in each; native/config hits log nearby
+text. Unit tested on a d8-built dex (`FrameworkScanTest`, `src/test/resources/probe.dex`). Waiting on the log.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

@@ -295,6 +295,18 @@ public final class MainActivity extends Activity implements PadLink.Listener {
             Diag.setEnabled(on);
             refresh();
         });
+        button("Search phone software for the scroll switch", v -> {
+            Diag.setEnabled(true);
+            v.setEnabled(false);
+            Toast.makeText(this, "Searching… this can take a minute", Toast.LENGTH_LONG).show();
+            new Thread(() -> FrameworkScan.run(msg -> runOnUiThread(() -> {
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                if (msg.startsWith("Search done")) {
+                    v.setEnabled(true);
+                    refresh();
+                }
+            })), "framework-scan").start();
+        });
         button("Open tap test screen", v -> startActivity(new Intent(this, TapTestActivity.class)));
         switchPref(Prefs.TAP_DELAY_TEST, "Test: taps on the keyboard click 1 s late", false);
         switchPref(Prefs.KEY_TIMER_TEST, "Test: send the click key's click from a timer", false);
