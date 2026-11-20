@@ -145,8 +145,9 @@ Enter). Firefox code checked further: `EngineViewScrollingGesturesBehavior` and 
 don't block taps; nothing checks touch mode/input mode/touchpad. The only code difference left was that each
 pad touch report calls `onPointerMove` → `updateViewLayout` on the cursor window even with zero movement
 (Enter's own pad touch is dropped as typing first). 1.13 skips relayouts when the position is unchanged.
-If the URL bar still ignores taps, nothing in TitanPointer differs between the two clicks: stop changing
-code for it unless the user asks (the user doesn't want more debugging rounds).
+**Result: 1.13 didn't fix it, and Chrome's address bar ignores pad taps too** (Enter works). Chrome's
+toolbar is classic Views, Firefox's is Compose, so it's not toolbar code. Closed as outside TitanPointer
+(Android / the Titan's software); workaround: the click key. Don't reopen unless the user asks.
 
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
