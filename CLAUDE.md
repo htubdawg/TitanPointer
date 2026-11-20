@@ -168,6 +168,10 @@ works with pad taps** (whole top toolbar, Firefox and Chrome). Chromium `Toolbar
 toolbar taps when the toolbar view isn't VISIBLE, but that would hit Enter too. Last code difference: Enter
 clicks from inside `onKeyEvent`, pad taps from a Handler. Test switch `Prefs.KEY_TIMER_TEST` sends the click
 key's click via `main.post` (no delay). If Enter then fails on the toolbar, that's the cause.
+**Result: no difference** (Enter via main.post still works). So TitanPointer sends the identical tap
+from the identical context either way; what differs is only the physical action before it (a stationary
+keyboard tap, with no key press or slide between it and the click). Unexplained; workaround: the click key.
+Don't reopen unless the user asks.
 
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
