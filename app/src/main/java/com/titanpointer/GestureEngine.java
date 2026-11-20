@@ -10,7 +10,7 @@ import java.util.List;
  *   <li>tap: click</li>
  *   <li>tap twice: double click</li>
  *   <li>tap, then touch again and slide: drag (optional)</li>
- *   <li>scroll mode on: slides scroll instead, and taps never click</li>
+ *   <li>scroll mode on: slides scroll instead, and taps never click; a quick flick keeps scrolling (fling)</li>
  * </ul>
  *
  * Touches that start in the keyboard's top row (Back, Recents, home) are ignored entirely.
@@ -23,7 +23,11 @@ public final class GestureEngine implements TouchTracker.Listener {
         void onClick();
         void onScrollBegin();
         void onScroll(float dx, float dy);
-        void onScrollEnd();
+        /**
+         * The scroll swipe ended. (vx, vy) is the fling velocity in screen pixels per second, already scaled
+         * and inverted like {@link #onScroll}; both are 0 when the finger stopped before lifting (no fling).
+         */
+        void onScrollEnd(float vx, float vy);
         void onDragBegin();
         void onDragEnd();
     }
@@ -55,6 +59,12 @@ public final class GestureEngine implements TouchTracker.Listener {
         /** A slide must travel this far before scrolling starts, so small wobbles never scroll. */
         public float scrollSlop = 0.06f;
         public long typingSuppressMs = 350;
+        /** Flick to keep scrolling after the finger lifts. */
+        public boolean fling = true;
+        /** Pad speed (pad widths per second) over the last {@link #flingWindowMs} needed for a fling. */
+        public float flingMinSpeed = 0.6f;
+        /** How much of the swipe's end is used to measure its speed. */
+        public long flingWindowMs = 80;
         /**
          * Touches that start in this top fraction of the device's raw Y range are ignored (the Titan's
          * top keyboard row: Shift, Recents, home, Back, Alt). Measured on raw device Y, before swap/invert.
@@ -86,6 +96,13 @@ public final class GestureEngine implements TouchTracker.Listener {
 
     private int trackedId;
     private float[] prev; // previous normalized position of the tracked finger
+
+    // Recent scroll movement (pad units) for measuring fling speed: ring buffer of (time, du, dv).
+    private static final int SAMPLES = 16;
+    private final long[] sampleT = new long[SAMPLES];
+    private final long[] samplePrevT = new long[SAMPLES];
+    private final float[] sampleU = new float[SAMPLES], sampleV = new float[SAMPLES];
+    private int sampleCount = 0, sampleHead = 0;
 
     private final Runnable pendingClick = new Runnable() {
         @Override
@@ -125,7 +142,7 @@ public final class GestureEngine implements TouchTracker.Listener {
         cancelPendingClick();
         if (!on && scrollActive) {
             scrollActive = false;
-            actions.onScrollEnd();
+            actions.onScrollEnd(0, 0);
         }
     }
 
@@ -135,7 +152,7 @@ public final class GestureEngine implements TouchTracker.Listener {
 
     /** Abandon any gesture in progress (e.g. when pointer mode is switched off). */
     public void reset() {
-        if (scrollActive) actions.onScrollEnd();
+        if (scrollActive) actions.onScrollEnd(0, 0);
         if (mode == MODE_DRAG) actions.onDragEnd();
         cancelPendingClick();
         touching = false;
@@ -178,7 +195,7 @@ public final class GestureEngine implements TouchTracker.Listener {
         float[] p = normalize(c.x, c.y);
         if (!ignored && p != null && prev != null) {
             float dt = Math.max(5f, now - lastFrameTime) / 1000f;
-            slide(now, p[0] - prev[0], p[1] - prev[1], dt);
+            slide(now, p[0] - prev[0], p[1] - prev[1], dt, lastFrameTime);
         }
         prev = p;
         lastFrameTime = now;
@@ -214,7 +231,7 @@ public final class GestureEngine implements TouchTracker.Listener {
         }
     }
 
-    private void slide(long now, float du, float dv, float dt) {
+    private void slide(long now, float du, float dv, float dt, long prevTime) {
         float dist = (float) Math.hypot(du, dv);
         travel += dist;
         if (travel > cfg.tapSlop) moved = true;
@@ -225,8 +242,10 @@ public final class GestureEngine implements TouchTracker.Listener {
                 if (travel < cfg.scrollSlop) return;
                 scrollActive = true;
                 mode = MODE_SCROLL;
+                sampleCount = 0;
                 actions.onScrollBegin();
             }
+            addSample(now, prevTime, du, dv);
             float k = cfg.screenWidthPx * cfg.scrollSpeed * (cfg.invertScroll ? -1f : 1f);
             actions.onScroll(du * k, dv * k);
             return;
@@ -254,7 +273,14 @@ public final class GestureEngine implements TouchTracker.Listener {
         long dur = now - touchStart;
         if (scrollActive) {
             scrollActive = false;
-            actions.onScrollEnd();
+            float vx = 0, vy = 0;
+            float[] v = cfg.fling && !keyDuringTouch ? padVelocity(now) : null;
+            if (v != null && Math.hypot(v[0], v[1]) >= cfg.flingMinSpeed) {
+                float k = cfg.screenWidthPx * cfg.scrollSpeed * (cfg.invertScroll ? -1f : 1f);
+                vx = v[0] * k;
+                vy = v[1] * k;
+            }
+            actions.onScrollEnd(vx, vy);
         }
         boolean wasDrag = mode == MODE_DRAG;
         mode = MODE_NONE;
@@ -280,6 +306,38 @@ public final class GestureEngine implements TouchTracker.Listener {
         }
         dragCandidate = false;
         clickOwed = false;
+    }
+
+    private void addSample(long t, long prevT, float du, float dv) {
+        sampleT[sampleHead] = t;
+        samplePrevT[sampleHead] = prevT;
+        sampleU[sampleHead] = du;
+        sampleV[sampleHead] = dv;
+        sampleHead = (sampleHead + 1) % SAMPLES;
+        if (sampleCount < SAMPLES) sampleCount++;
+    }
+
+    /**
+     * Speed of the scroll swipe's last {@link Config#flingWindowMs} up to the lift at {@code now}, in pad
+     * units per second, or null if the finger didn't move in that time. A pause before lifting counts as
+     * slowing down, so a swipe that stops and then lifts doesn't fling.
+     */
+    float[] padVelocity(long now) {
+        long from = now - cfg.flingWindowMs;
+        float su = 0, sv = 0;
+        long start = now;
+        int n = 0;
+        for (int i = 0; i < sampleCount; i++) {
+            int j = (sampleHead - 1 - i + SAMPLES) % SAMPLES;
+            if (sampleT[j] <= from) break;
+            su += sampleU[j];
+            sv += sampleV[j];
+            start = Math.max(from, samplePrevT[j]);
+            n++;
+        }
+        if (n == 0) return null;
+        float dt = Math.max(16, now - start) / 1000f;
+        return new float[] {su / dt, sv / dt};
     }
 
     /**

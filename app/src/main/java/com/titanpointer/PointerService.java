@@ -42,6 +42,7 @@ public final class PointerService extends AccessibilityService
     private CursorView cursor;
     private WindowManager.LayoutParams lp;
     private GestureInjector injector;
+    private ClickTrace trace;
     private GestureEngine engine;
     private TouchTracker tracker;
 
@@ -69,6 +70,8 @@ public final class PointerService extends AccessibilityService
         link = PadLink.get(this);
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         injector = new GestureInjector(this);
+        trace = new ClickTrace(this, main);
+        trace.enableWindowAccess();
         engine = new GestureEngine(this, SystemClock::uptimeMillis, new GestureEngine.Scheduler() {
             @Override
             public void post(Runnable r, long delayMs) {
@@ -85,6 +88,7 @@ public final class PointerService extends AccessibilityService
         px = screenW / 2f;
         py = screenH / 2f;
         createCursor();
+        Diag.setEnabled(prefs.getBoolean(Prefs.DIAG, false));
         prefs.registerOnSharedPreferenceChangeListener(this);
         link.addListener(this);
         if (prefs.getBoolean(Prefs.ENABLED, true)) activate();
@@ -160,6 +164,7 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (trace != null) trace.onEvent(event);
         if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
         String w = event.getPackageName() + "/" + event.getClassName();
         if (w.equals(foreground)) return;
@@ -222,6 +227,10 @@ public final class PointerService extends AccessibilityService
         link.setOpen(OWNER, false);
         main.removeCallbacks(autoHide);
         main.removeCallbacks(liftScroll);
+        main.removeCallbacks(delayedPadClick);
+        cancelScrollWait();
+        main.removeCallbacks(timerKeyClick);
+        trace.reset();
         scrollHeld = false;
         if (cursor != null) cursor.setState(CursorView.STATE_NORMAL);
         setCursorVisible(false);
@@ -428,6 +437,13 @@ public final class PointerService extends AccessibilityService
             }
         }
         int action = e.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            trace.padDown(Math.round(e.getX()), Math.round(e.getY()), focusWindowTouchMode());
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            trace.padMove(Math.round(e.getX()), Math.round(e.getY()));
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            trace.padUp(focusWindowTouchMode());
+        }
         contacts.clear();
         if (action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL) {
             int skip = action == MotionEvent.ACTION_POINTER_UP ? e.getActionIndex() : -1;
@@ -450,7 +466,12 @@ public final class PointerService extends AccessibilityService
             return true;
         }
         if (matches(event, Prefs.CLICK_KEY, Prefs.DEFAULT_CLICK_KEY, Prefs.CLICK_META, Prefs.DEFAULT_CLICK_META)) {
-            if (down && event.getRepeatCount() == 0) onClick();
+            if (down && event.getRepeatCount() == 0) {
+                // Test: leave Android's key callback first and click from the main thread's queue, the
+                // way a keyboard tap's click is sent. No added delay.
+                if (prefs.getBoolean(Prefs.KEY_TIMER_TEST, false)) main.post(timerKeyClick);
+                else click("click key", false);
+            }
             return true;
         }
         switch (k) {
@@ -491,6 +512,9 @@ public final class PointerService extends AccessibilityService
     public void onSharedPreferenceChanged(SharedPreferences p, String key) {
         if (key == null) return;
         switch (key) {
+            case Prefs.DIAG:
+                Diag.setEnabled(p.getBoolean(Prefs.DIAG, false));
+                break;
             case Prefs.ENABLED: // from the app's switch or the Quick Settings tile
                 if (p.getBoolean(Prefs.ENABLED, true)) activate();
                 else deactivate();
@@ -622,12 +646,97 @@ public final class PointerService extends AccessibilityService
         if (dragging) injector.streamTo(px, py);
     }
 
+    /** Click from the touchpad (tap). */
     @Override
     public void onClick() {
         if (!active) return;
+        if (prefs.getBoolean(Prefs.TAP_DELAY_TEST, false)) {
+            main.postDelayed(delayedPadClick, 1000);
+            return;
+        }
+        clickWhenTitanScrollOff("tap on keyboard");
+    }
+
+    // ---- The Titan's keyboard-scroll switch ----
+    // The Titan's scroll assistant (needed: without it the keyboard touches don't reach us) sets the system
+    // property debug.sf.forcescroll_view to "yes" when the keyboard surface is touched and back to "no" on a
+    // key press. While it is "yes", the phone's modified View.onTouchEvent refuses taps on standard buttons,
+    // so a keyboard-tap click is held until it reads "no". Apps can read but not set the property.
+
+    private static final String TITAN_SCROLL_PROP = "debug.sf.forcescroll_view";
+    private static final long SCROLL_WAIT_POLL_MS = 20, SCROLL_WAIT_MAX_MS = 3000;
+    private Runnable pendingScrollWait;
+
+    static String titanScrollProp() {
+        try {
+            Class<?> sp = Class.forName("android.os.SystemProperties");
+            return (String) sp.getMethod("get", String.class, String.class).invoke(null, TITAN_SCROLL_PROP, "");
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    private void clickWhenTitanScrollOff(final String source) {
+        // 1.19 held the click until the switch read "no", but it never resets without a key press, so
+        // taps did nothing. Click right away (the log still records the switch's value).
+        click(source, true);
+    }
+
+    @SuppressWarnings("unused")
+    private void clickWhenTitanScrollOffHeld(final String source) {
+        cancelScrollWait();
+        if (!"yes".equals(titanScrollProp())) {
+            click(source, true);
+            return;
+        }
+        final float x = px, y = py;
+        final long start = SystemClock.uptimeMillis();
+        Diag.log("keyboard tap click held: " + TITAN_SCROLL_PROP + " is yes");
         setCursorVisible(true);
         flash();
-        injector.tap(px, py);
+        pendingScrollWait = new Runnable() {
+            @Override
+            public void run() {
+                long waited = SystemClock.uptimeMillis() - start;
+                boolean off = !"yes".equals(titanScrollProp());
+                if (!off && waited < SCROLL_WAIT_MAX_MS) {
+                    main.postDelayed(this, SCROLL_WAIT_POLL_MS);
+                    return;
+                }
+                pendingScrollWait = null;
+                Diag.log(off ? TITAN_SCROLL_PROP + " went back to no after " + waited + " ms: clicking"
+                        : TITAN_SCROLL_PROP + " still yes after " + waited + " ms: clicking anyway");
+                clickAt(source + (off ? ", waited " + waited + " ms" : ", scroll switch stayed on"), true, x, y);
+            }
+        };
+        main.postDelayed(pendingScrollWait, SCROLL_WAIT_POLL_MS);
+    }
+
+    private void cancelScrollWait() {
+        if (pendingScrollWait != null) main.removeCallbacks(pendingScrollWait);
+        pendingScrollWait = null;
+    }
+
+    /** Android's touch mode as our focus window sees it (diagnostics). */
+    private boolean focusWindowTouchMode() {
+        View c = catcher;
+        return c != null && c.isInTouchMode();
+    }
+
+    private final Runnable delayedPadClick = () -> clickWhenTitanScrollOff("tap on keyboard, delayed 1 s for testing");
+    private final Runnable timerKeyClick = () -> click("click key, sent from a timer for testing", false);
+
+    private void click(String source, boolean fromPad) {
+        clickAt(source, fromPad, px, py);
+    }
+
+    private void clickAt(String source, boolean fromPad, float x, float y) {
+        if (!active) return;
+        setCursorVisible(true);
+        flash();
+        final int n = trace.click(source, fromPad, x, y, focusWindowTouchMode());
+        if (Diag.isEnabled()) Diag.log("  " + TITAN_SCROLL_PROP + " = " + titanScrollProp());
+        injector.tap(x, y, Diag.isEnabled() ? what -> trace.tapResult(n, what) : null);
     }
 
     private void onLongPress() {
@@ -678,8 +787,18 @@ public final class PointerService extends AccessibilityService
     }
 
     @Override
-    public void onScrollEnd() {
+    public void onScrollEnd(float vx, float vy) {
         if (cursor != null) cursor.setState(engine.isScrollLock() ? CursorView.STATE_SCROLL : CursorView.STATE_NORMAL);
+        if (active && engine.isScrollLock() && (vx != 0 || vy != 0) && injector.isStreaming()) {
+            // A flick: lift the injected finger while it's still moving so the app flings. The 300 ms hold
+            // below would stop it dead. A lift after a fast move is never taken as a tap, so the next
+            // swipe can't make a double tap (the zoom the hold prevents).
+            main.removeCallbacks(liftScroll);
+            scrollHeld = false;
+            Diag.log(String.format(java.util.Locale.US, "scroll fling %.0f, %.0f px/s", vx, vy));
+            injector.flingEnd(vx, vy);
+            return;
+        }
         if (!active || !engine.isScrollLock()) {
             main.removeCallbacks(liftScroll);
             scrollHeld = false;
@@ -754,7 +873,12 @@ public final class PointerService extends AccessibilityService
 
     private void placeCursor() {
         if (cursor == null || !cursorShown || !cursorAttached) return;
+        int oldX = lp.x, oldY = lp.y;
         placeCursorParams();
+        // lp always holds the position last given to the window manager (addView or updateViewLayout),
+        // so an unchanged position needs no relayout. Taps on the keyboard report many zero-length
+        // moves; an Enter click relayouts nothing, and keyboard taps now don't either.
+        if (lp.x == oldX && lp.y == oldY) return;
         try {
             wm.updateViewLayout(cursor, lp);
         } catch (RuntimeException ignored) {

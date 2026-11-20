@@ -13,7 +13,7 @@ public class GestureEngineTest {
     private long now = 1000;
     private final List<String> log = new ArrayList<>();
     private final List<Object[]> scheduled = new ArrayList<>();
-    private float moveX, moveY, scrollX, scrollY;
+    private float moveX, moveY, scrollX, scrollY, flingX, flingY;
     private GestureEngine engine;
     private TouchTracker tracker;
 
@@ -24,7 +24,7 @@ public class GestureEngineTest {
             @Override public void onClick() { log.add("click"); }
             @Override public void onScrollBegin() { log.add("scrollBegin"); }
             @Override public void onScroll(float dx, float dy) { scrollX += dx; scrollY += dy; }
-            @Override public void onScrollEnd() { log.add("scrollEnd"); }
+            @Override public void onScrollEnd(float vx, float vy) { log.add("scrollEnd"); flingX = vx; flingY = vy; }
             @Override public void onDragBegin() { log.add("dragBegin"); }
             @Override public void onDragEnd() { log.add("dragEnd"); }
         }, () -> now, new GestureEngine.Scheduler() {
@@ -247,6 +247,66 @@ public class GestureEngineTest {
         advance(1000);
         assertTrue(log.isEmpty());
         assertEquals(0f, scrollY, 0.01f);
+    }
+
+    /** Scroll swipe down: {@code frames} moves of {@code step} raw units every 10 ms. */
+    private void scrollSwipe(int frames, int step) {
+        frame(0, 1, 500, 50);
+        for (int i = 1; i <= frames; i++) { advance(10); frame(0, 1, 500, 50 + i * step); }
+    }
+
+    @Test
+    public void flickFlings() {
+        engine.setScrollLock(true);
+        scrollSwipe(6, 20); // 0.02 pad widths per 10 ms = 2 pad widths/s
+        advance(10); frame(0, -1, 0, 0);
+        assertEquals(List.of("scrollBegin", "scrollEnd"), log);
+        // 2 pad widths/s (the lift 10 ms after the last move counts as slowing a little) x 1000 px x 1.5
+        assertTrue("fling " + flingY, flingY > 2000 && flingY <= 3000);
+        assertEquals(0f, flingX, 0.01f);
+    }
+
+    @Test
+    public void stoppingBeforeLiftDoesNotFling() {
+        engine.setScrollLock(true);
+        scrollSwipe(6, 20);
+        advance(150); frame(0, -1, 0, 0);
+        assertEquals(List.of("scrollBegin", "scrollEnd"), log);
+        assertEquals(0f, flingY, 0.01f);
+    }
+
+    @Test
+    public void slowSwipeDoesNotFling() {
+        engine.setScrollLock(true);
+        scrollSwipe(40, 3); // 0.3 pad widths/s
+        advance(10); frame(0, -1, 0, 0);
+        assertEquals(List.of("scrollBegin", "scrollEnd"), log);
+        assertEquals(0f, flingY, 0.01f);
+    }
+
+    @Test
+    public void flingFollowsReverseScrollAndCanBeTurnedOff() {
+        engine.setScrollLock(true);
+        engine.getConfig().invertScroll = true;
+        scrollSwipe(6, 20);
+        advance(10); frame(0, -1, 0, 0);
+        assertTrue(flingY < -2000);
+
+        engine.getConfig().fling = false;
+        flingY = 123;
+        advance(500);
+        scrollSwipe(6, 20);
+        advance(10); frame(0, -1, 0, 0);
+        assertEquals(0f, flingY, 0.01f);
+    }
+
+    @Test
+    public void leavingScrollModeMidSwipeDoesNotFling() {
+        engine.setScrollLock(true);
+        scrollSwipe(6, 20);
+        flingY = 123;
+        engine.setScrollLock(false);
+        assertEquals(0f, flingY, 0.01f);
     }
 
     @Test
