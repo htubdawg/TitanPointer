@@ -71,6 +71,7 @@ public final class PointerService extends AccessibilityService
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         injector = new GestureInjector(this);
         trace = new ClickTrace(this, main);
+        trace.enableWindowAccess();
         engine = new GestureEngine(this, SystemClock::uptimeMillis, new GestureEngine.Scheduler() {
             @Override
             public void post(Runnable r, long delayMs) {
@@ -434,8 +435,13 @@ public final class PointerService extends AccessibilityService
             }
         }
         int action = e.getActionMasked();
-        if (action == MotionEvent.ACTION_DOWN) trace.padDown();
-        else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) trace.padUp();
+        if (action == MotionEvent.ACTION_DOWN) {
+            trace.padDown(Math.round(e.getX()), Math.round(e.getY()), focusWindowTouchMode());
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            trace.padMove(Math.round(e.getX()), Math.round(e.getY()));
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            trace.padUp(focusWindowTouchMode());
+        }
         contacts.clear();
         if (action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL) {
             int skip = action == MotionEvent.ACTION_POINTER_UP ? e.getActionIndex() : -1;
@@ -644,13 +650,19 @@ public final class PointerService extends AccessibilityService
         click("tap on keyboard", true);
     }
 
+    /** Android's touch mode as our focus window sees it (diagnostics). */
+    private boolean focusWindowTouchMode() {
+        View c = catcher;
+        return c != null && c.isInTouchMode();
+    }
+
     private final Runnable delayedPadClick = () -> click("tap on keyboard, delayed 1 s for testing", true);
 
     private void click(String source, boolean fromPad) {
         if (!active) return;
         setCursorVisible(true);
         flash();
-        final int n = trace.click(source, fromPad, px, py);
+        final int n = trace.click(source, fromPad, px, py, focusWindowTouchMode());
         injector.tap(px, py, Diag.isEnabled() ? what -> trace.tapResult(n, what) : null);
     }
 

@@ -149,6 +149,17 @@ pad touch report calls `onPointerMove` → `updateViewLayout` on the cursor wind
 toolbar is classic Views, Firefox's is Compose, so it's not toolbar code. Closed as outside TitanPointer
 (Android / the Titan's software); workaround: the click key. Don't reopen unless the user asks.
 
+## v1.14: logging from the keyboard touch on
+Reopened: an accessibility "one-hand mode" joystick app from the Play Store CAN click the address bar, and
+the user reports Enter works even while moving the pointer with the pad (so the touch-mode idea is out:
+`ViewRootImpl.processMotionEvent` does call `ensureTouchMode(false)` on every SOURCE_CLASS_POSITION
+ACTION_DOWN, but that doesn't break Enter clicks during a pad touch). Rejected by the user: clicking via
+ACTION_CLICK on the node (ignores the pointer position). `ClickTrace` rewritten: a watch starts at the pad
+touch DOWN (not at the click), logs down/up position and moves, focus window touch mode, input focus node,
+every event from other apps (types widened, notificationTimeout 0 during the watch; content changes capped),
+the click, windows/element under the pointer (FLAG_RETRIEVE_INTERACTIVE_WINDOWS also set at runtime; logs the
+window count if none match) and the tap result. Diag keeps 600 lines. Waiting on the user's log.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).
