@@ -9,6 +9,8 @@ on-screen pointer. Status at v1.2: the user reports the no-root mode is "mostly 
 - Usually on their phone: always **build the APK and send it** (SendUserFile, `display: attach`).
   Don't ask them to build. Keep `dist/TitanPointer-<version>.apk` current and bump
   `versionCode`/`versionName` in `app/build.gradle` for each APK you send.
+- **Keep README.md current with every release** (install link, features, limitations) and re-render the
+  settings images (`docs/screenshots/settings.html` mirrors MainActivity; `node docs/screenshots/render.js`).
 - Listen to what they say they observed. They were right that a no-root app can read the keyboard touches.
 - Develop on the branch the session names (v1.3–1.5 were on `ccr-40c55928-ihkbz5`). Don't open a PR unless asked.
 - Hardware facts live in `docs/titan-hardware.md`. Research the phone yourself (specs, photos) rather than asking the user to measure.
