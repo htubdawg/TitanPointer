@@ -13,6 +13,9 @@ on-screen pointer. Status at v1.2: the user reports the no-root mode is "mostly 
   settings images (`docs/screenshots/settings.html` mirrors MainActivity; `node docs/screenshots/render.js`).
 - Listen to what they say they observed. They were right that a no-root app can read the keyboard touches.
 - Develop on the branch the session names (v1.3–1.5 were on `ccr-40c55928-ihkbz5`). Don't open a PR unless asked.
+- **Before saying changes are "in the PR", check the PR is still open** (the user merges quickly). Pushing to a
+  branch whose PR was merged gives no error; those commits just aren't in main. After a merge, start new work
+  from the latest main and open a new PR when asked.
 - Hardware facts live in `docs/titan-hardware.md`. Research the phone yourself (specs, photos) rather than asking the user to measure.
 
 - **Signing**: builds use `signing/titanpointer.keystore` (committed). Never change it, or the user has to
