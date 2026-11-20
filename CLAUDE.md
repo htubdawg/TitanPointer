@@ -196,6 +196,18 @@ framework likely differs. User: **every** element on the test screen failed with
 reflection), whether onTouchEvent is reached, the root layout's intercept/dispatch, and adds a bare View
 that returns true from onTouchEvent. Waiting on the user's log.
 
+## v1.18
+**1.17 log, key result**: on pad-tap clicks a clickable TextView's `onTouchEvent` is REACHED and returns
+**false** at DOWN (all gates before it pass, flags 0); on Enter clicks it returns true and clicks. A bare
+View whose own onTouchEvent returns true accepts both. Stock Android 10 `View.onTouchEvent` always returns
+true for a clickable view, so **the Titan's framework modifies View.onTouchEvent** to refuse touches after
+keyboard-surface use until something (a key press, a real screen touch) resets it. That explains: View-based
+toolbars/buttons fail; web content, Compose UIs and the joystick app (no pad touch) work. 1.18 adds
+`StateProbe`: at each DOWN on a test element it snapshots the view's/AttachInfo/ViewRootImpl/DecorView
+fields, static fields of view/input classes, IMM/InputManager instance fields, getprop and Settings
+System/Global/Secure (hidden API exemption via meta-reflection, Android 10), and logs the diff from the
+previous touch labelled ACCEPTED/REFUSED. Diag keeps 2000 lines. Waiting on the user's log.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

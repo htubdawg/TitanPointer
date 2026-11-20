@@ -68,7 +68,7 @@ public final class TapTestActivity extends Activity {
         help.setText("1. Turn pointer mode on, put the pointer on the fake address bar.\n"
                 + "2. Tap the keyboard once. Wait 2 s.\n"
                 + "3. Press Enter once. Wait 2 s.\n"
-                + "4. Do the same on the orange bare view below.\n"
+                + "4. Repeat steps 2 and 3 twice more on the address bar.\n"
                 + "5. Turn pointer mode off and tap “Copy log” with your finger.\n\n"
                 + "Each element fades for a moment when it registers a click.");
         root.addView(help);
@@ -193,6 +193,30 @@ public final class TapTestActivity extends Activity {
         return sb.toString();
     }
 
+    private java.util.Map<String, String> lastSnap;
+    private boolean lastAccepted;
+    private String lastName;
+
+    /** Logs what changed since the previous touch on a test element, labelled by whether each was accepted. */
+    private void compareWithLast(java.util.Map<String, String> snap, boolean accepted, String name) {
+        if (lastSnap != null) {
+            java.util.List<String> d = StateProbe.diff(lastSnap, snap);
+            log("STATE CHANGES from previous touch (" + lastName + ", " + (lastAccepted ? "ACCEPTED" : "REFUSED")
+                    + ") to this one (" + name + ", " + (accepted ? "ACCEPTED" : "REFUSED") + "): " + d.size());
+            int n = 0;
+            for (String line : d) {
+                if (n++ >= 150) {
+                    log("    … " + (d.size() - 150) + " more");
+                    break;
+                }
+                log("    " + line);
+            }
+        }
+        lastSnap = snap;
+        lastAccepted = accepted;
+        lastName = name;
+    }
+
     /** Every check standard Android applies before a view gets a touch, as this phone answers them. */
     @android.annotation.SuppressLint("SoonBlockedPrivateApi") // diagnostics only; caught if refused
     static void logGates(View v, String name, MotionEvent e) {
@@ -315,8 +339,16 @@ public final class TapTestActivity extends Activity {
 
         @Override
         public boolean dispatchTouchEvent(MotionEvent e) {
-            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) logGates(this, name, e);
+            boolean down = e.getActionMasked() == MotionEvent.ACTION_DOWN;
+            java.util.Map<String, String> snap = null;
+            if (down) {
+                logGates(this, name, e);
+                long t0 = SystemClock.uptimeMillis();
+                snap = StateProbe.snapshot(TapTestActivity.this, this);
+                log("  state snapshot: " + snap.size() + " values in " + (SystemClock.uptimeMillis() - t0) + " ms");
+            }
             boolean r = super.dispatchTouchEvent(e);
+            if (down) compareWithLast(snap, r, name);
             if (e.getActionMasked() != MotionEvent.ACTION_MOVE) {
                 log("  " + name + " got " + MotionEvent.actionToString(e.getAction()).replace("ACTION_", "")
                         + " handled=" + r + " pressed=" + isPressed());

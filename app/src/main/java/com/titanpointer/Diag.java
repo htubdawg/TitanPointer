@@ -11,7 +11,7 @@ import java.util.Map;
 
 /** Small in-memory log of what the pointer service sees, shown (and copyable) in the app. */
 public final class Diag {
-    private static final int MAX = 600;
+    private static final int MAX = 2000;
     private static final ArrayDeque<String> lines = new ArrayDeque<>();
     private static final Map<String, Long> lastByKey = new HashMap<>();
     private static final SimpleDateFormat fmt = new SimpleDateFormat("HH:mm:ss.SSS", Locale.US);
