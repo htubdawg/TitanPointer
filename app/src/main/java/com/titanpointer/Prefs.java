@@ -19,6 +19,8 @@ public final class Prefs {
     public static final String GRAB = "grab";
     public static final String SWAP = "swap", INV_X = "inv_x", INV_Y = "inv_y";
     public static final String SENS = "sens", ACCEL = "accel", YSPEED = "yspeed", SCROLL = "scroll", INV_SCROLL = "inv_scroll";
+    /** Flick to keep scrolling (momentum). */
+    public static final String FLING = "fling";
     public static final String TAP = "tap", TAP_DRAG = "tap_drag", TYPING_MS = "typing_ms";
     /** Touches starting in this top part of the pad (percent of its height) are ignored: the key row with Back/Recents. */
     public static final String IGNORE_TOP = "ignore_top";
@@ -95,6 +97,7 @@ public final class Prefs {
         g.ySpeed = p.getInt(YSPEED, 10) / 10f;
         g.scrollSpeed = p.getInt(SCROLL, 15) / 10f;
         g.invertScroll = p.getBoolean(INV_SCROLL, false);
+        g.fling = p.getBoolean(FLING, true);
         g.tapToClick = p.getBoolean(TAP, true);
         g.tapDrag = p.getBoolean(TAP_DRAG, true);
         g.typingSuppressMs = p.getInt(TYPING_MS, 350);

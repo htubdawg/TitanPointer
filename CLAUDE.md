@@ -101,36 +101,18 @@ Diagnostics capture switch (`Prefs.DIAG`, default on; off clears the log and hid
 notification text shortened to say long-press hides it: the foreground service stays even if the user turns
 the notification off. The user confirmed the v1.7 notes-app fix and the top-row cut-off work.
 
-## Plan for v1.10 (agreed with the user, not started)
-Ship both in one APK (versionCode 11, versionName '1.10'); also add a v1.10 section here when done.
-
-### 1. Fling (momentum) scrolling
-Today a scroll swipe stops dead when the finger lifts (`GestureEngine` → `onScrollEnd`), so long pages need
-many swipes. Wanted: a quick swipe keeps scrolling and slows down, like flicking a phone screen.
-- How scrolling works now: scroll mode (Space) → `GestureEngine` calls `onScrollBegin/onScroll(dx,dy)/onScrollEnd`
-  → `PointerService` streams one injected finger (`GestureInjector.beginStream/streamTo`) and keeps it down
-  `SCROLL_HOLD_MS` (300 ms) after each swipe so quick swipes aren't seen as a double tap (that zoomed apps).
-- Suggested approach: let the injected finger itself fling. Track the pad's velocity over the last ~50–100 ms
-  in `GestureEngine` (it's unit tested: add tests). On lift, if speed is above a threshold, end the injected
-  stroke with a fast final movement in the swipe direction instead of holding still, so the target app's
-  own fling physics take over (that matches how every app already scrolls). Note the current 300 ms hold
-  keeps the finger still before lifting, which kills any fling: a flick has to lift while moving.
-  Watch that this doesn't bring back the double-tap zoom problem the hold fixed (test quick repeated flicks
-  in Chrome and a maps/photo app).
-- Fallback if apps don't fling from injected strokes: run our own decaying scroll (keep streaming smaller
-  moves on a timer until speed drops below a minimum), cancelled by the next touch, a key or leaving scroll mode.
-- Settings: a "Fling" switch (default on) under "Scrolling". Respect `INV_SCROLL` and scroll speed.
-
-### 2. Move root/ADB into an "Advanced" section
-Root/ADB mode has never been tested on a real Titan and clutters the settings; the user's phone uses no-root.
-- In `MainActivity`, section "2. How to read the keyboard" shows the 3-way mode radio group, then `noRootBox`
-  / `rootBox` (rootBox holds the ADB box, link status, "3. Pick the keyboard touch device" and
-  "4. Test & calibrate").
-- Move the radio group and `rootBox` to a new section near the bottom (above Diagnostics):
-  "Advanced: root / ADB (untested)", collapsed by default behind a tap-to-expand header. Keep `noRootBox`'s
-  content (pointer-mode help, letters setting, probe button) where it is, as the main "How it works" section.
-- If the mode is already root/adb, start the Advanced section expanded so the user isn't stuck.
-- Renumber the remaining setup headings. Behavior and prefs keys stay the same.
+## v1.10
+- **Fling scrolling** (`Prefs.FLING`, default on, under Scrolling). `GestureEngine` keeps the last 16 scroll
+  moves and on lift measures speed over the last 80 ms (`padVelocity`; a pause before lifting counts, so
+  stop-then-lift doesn't fling). At ≥ 0.6 pad widths/s it calls `onScrollEnd(vx, vy)` with px/s (scaled and
+  inverted like scrolling; 0,0 = no fling). `PointerService` then skips the 300 ms hold and calls
+  `GestureInjector.flingEnd`, which adds one last 60 ms segment still moving at that speed (capped 12000 px/s,
+  shortened near the screen edge) and lifts, so the app's own fling physics take over. Logged in Diag
+  ("scroll fling"). Not yet tried on the phone: if apps don't fling from injected strokes, the fallback is
+  our own decaying scroll on a timer; also watch for the old double-tap zoom with quick repeated flicks.
+- **Advanced section**: the mode radio group and the root/ADB box (device picker, test & calibrate, now
+  unnumbered) moved to a collapsible "Advanced: root / ADB (untested)" section above Diagnostics, expanded
+  only if the mode is already root/adb. Section 2 is now "How it works" (shows a note when a helper mode is on).
 
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge

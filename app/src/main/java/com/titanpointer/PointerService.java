@@ -682,8 +682,18 @@ public final class PointerService extends AccessibilityService
     }
 
     @Override
-    public void onScrollEnd() {
+    public void onScrollEnd(float vx, float vy) {
         if (cursor != null) cursor.setState(engine.isScrollLock() ? CursorView.STATE_SCROLL : CursorView.STATE_NORMAL);
+        if (active && engine.isScrollLock() && (vx != 0 || vy != 0) && injector.isStreaming()) {
+            // A flick: lift the injected finger while it's still moving so the app flings. The 300 ms hold
+            // below would stop it dead. A lift after a fast move is never taken as a tap, so the next
+            // swipe can't make a double tap (the zoom the hold prevents).
+            main.removeCallbacks(liftScroll);
+            scrollHeld = false;
+            Diag.log(String.format(java.util.Locale.US, "scroll fling %.0f, %.0f px/s", vx, vy));
+            injector.flingEnd(vx, vy);
+            return;
+        }
         if (!active || !engine.isScrollLock()) {
             main.removeCallbacks(liftScroll);
             scrollHeld = false;

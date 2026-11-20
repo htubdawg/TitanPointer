@@ -47,6 +47,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     private Switch enabledSwitch, grabSwitch, zoneSwitch;
     private View adbBox;
     private LinearLayout noRootBox, rootBox;
+    private TextView helperNote;
     private TestPadView testPad;
     private Button calibrateButton;
     private TouchTracker testTracker;
@@ -102,32 +103,9 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         enabledSwitch = switchPref(Prefs.ENABLED, "Pointer mode", true);
         hint("Toggle with Alt + Space (change it under Keys), or the Quick Settings tile “Keyboard pointer”.");
 
-        // --- Connection
-        section("2. How to read the keyboard");
-        RadioGroup rg = new RadioGroup(this);
-        RadioButton rNo = new RadioButton(this);
-        rNo.setText("No root (recommended)");
-        rNo.setId(View.generateViewId());
-        RadioButton rRoot = new RadioButton(this);
-        rRoot.setText("Root (su): typing and pointer at the same time");
-        rRoot.setId(View.generateViewId());
-        RadioButton rAdb = new RadioButton(this);
-        rAdb.setText("ADB helper: like root, started from a computer");
-        rAdb.setId(View.generateViewId());
-        rg.addView(rNo);
-        rg.addView(rRoot);
-        rg.addView(rAdb);
-        String mode = prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT);
-        rg.check("adb".equals(mode) ? rAdb.getId() : "root".equals(mode) ? rRoot.getId() : rNo.getId());
-        rg.setOnCheckedChangeListener((g, id) -> {
-            prefs.edit().putString(Prefs.MODE, id == rAdb.getId() ? "adb" : id == rRoot.getId() ? "root" : Prefs.MODE_NOROOT).apply();
-            refresh();
-            boolean helper = id != rNo.getId();
-            link.setOpen(OWNER, helper && prefs.getString(Prefs.DEVICE, null) != null);
-            link.restart();
-        });
-        root.addView(rg);
-
+        // --- How it works
+        section("2. How it works");
+        helperNote = text("Pointer mode uses the root / ADB helper (see Advanced at the bottom).");
         LinearLayout outer = root;
         noRootBox = new LinearLayout(this);
         noRootBox.setOrientation(LinearLayout.VERTICAL);
@@ -142,73 +120,6 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         spinnerPref(Prefs.LETTERS, "Letter keys in pointer mode", new String[] {Prefs.LETTERS_NOTHING, Prefs.LETTERS_EXIT},
                 new String[] {"Do nothing", "Turn pointer mode off"}, Prefs.LETTERS_NOTHING);
         button("Open keyboard input probe", v -> startActivity(new Intent(this, ProbeActivity.class)));
-        root = outer;
-
-        rootBox = new LinearLayout(this);
-        rootBox.setOrientation(LinearLayout.VERTICAL);
-        outer.addView(rootBox);
-        root = rootBox;
-        hint("A tiny helper reads the raw sensor directly, so typing keeps working while the pointer is on. "
-                + "Root asks for su; the ADB helper is started from a computer once per boot.");
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        adbBox = box;
-        root.addView(box);
-        TextView t = new TextView(this);
-        t.setText("Enable USB debugging, connect a computer and run this once after every reboot:");
-        box.addView(t);
-        adbCommand = new TextView(this);
-        adbCommand.setTypeface(Typeface.MONOSPACE);
-        adbCommand.setTextIsSelectable(true);
-        adbCommand.setTextSize(12);
-        adbCommand.setPadding(0, (int) (6 * dp), 0, (int) (6 * dp));
-        box.addView(adbCommand);
-        Button copy = new Button(this);
-        copy.setText("Copy command");
-        copy.setOnClickListener(v -> {
-            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("adb", adbCommand.getText()));
-            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
-        });
-        box.addView(copy);
-
-        linkStatus = text("");
-        linkStatus.setTypeface(Typeface.DEFAULT_BOLD);
-
-        // --- Device
-        section("3. Pick the keyboard touch device");
-        deviceText = text("");
-        button("Find devices", v -> {
-            Toast.makeText(this, "Scanning input devices…", Toast.LENGTH_SHORT).show();
-            link.requestDeviceList();
-        });
-        grabSwitch = switchPref(Prefs.GRAB, "Exclusive access while pointer mode is on", false);
-        hint("Stops Android and the Titan's own keyboard scrolling from also reacting to your swipes. "
-                + "Don't use it if the chosen device is also the screen or the keys (the app warns you).");
-
-        // --- Test
-        section("4. Test & calibrate");
-        hint("Touch the keyboard: dots should follow your fingers. If the device reports more than the keyboard "
-                + "(for example it is the main touchscreen), calibrate to limit it to the keyboard area.");
-        testPad = new TestPadView(this);
-        testTracker = new TouchTracker(testPad);
-        root.addView(testPad, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-        LinearLayout row = new LinearLayout(this);
-        calibrateButton = new Button(this);
-        calibrateButton.setText("Calibrate area");
-        calibrateButton.setOnClickListener(v -> {
-            if (calibrateButton.getTag() == null) {
-                calibrateButton.setTag("on");
-                calibrateButton.setText("Finish calibration");
-                testPad.startCalibration();
-            } else {
-                finishCalibration(true);
-            }
-        });
-        row.addView(calibrateButton);
-        root.addView(row);
-        zoneSwitch = switchPref(Prefs.ZONE_ON, "Only use the calibrated area", false);
         root = outer;
 
         // --- Orientation
@@ -240,6 +151,8 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         hint("In scroll mode, slides scroll and taps never click.");
         seekPref(Prefs.SCROLL, "Scroll speed", 2, 60, 15, v -> String.format(Locale.US, "%.1f×", v / 10f));
         switchPref(Prefs.INV_SCROLL, "Reverse scroll direction", false);
+        switchPref(Prefs.FLING, "Fling: a quick flick keeps scrolling", true);
+        hint("Flick and lift while still moving to keep scrolling; stop before lifting to stop dead.");
 
         // --- Keys
         section("Keys");
@@ -258,6 +171,119 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 + "• Tap, then touch again and move: drag\n"
                 + "• Space, then slide: scroll\n"
                 + "• Typing is ignored automatically");
+
+        // --- Advanced: root / ADB
+        boolean helperMode = !Prefs.MODE_NOROOT.equals(prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT));
+        final TextView advHeader = new TextView(this);
+        advHeader.setTextSize(18);
+        advHeader.setTypeface(Typeface.DEFAULT_BOLD);
+        advHeader.setPadding(0, (int) (20 * dp), 0, (int) (6 * dp));
+        root.addView(advHeader);
+        final LinearLayout advOuter = root;
+        final LinearLayout advBox = new LinearLayout(this);
+        advBox.setOrientation(LinearLayout.VERTICAL);
+        advOuter.addView(advBox);
+        final Runnable showAdv = () -> advHeader.setText((advBox.getVisibility() == View.VISIBLE ? "▾ " : "▸ ")
+                + "Advanced: root / ADB (untested)");
+        advBox.setVisibility(helperMode ? View.VISIBLE : View.GONE);
+        showAdv.run();
+        advHeader.setOnClickListener(v -> {
+            advBox.setVisibility(advBox.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+            showAdv.run();
+        });
+        root = advBox;
+        hint("Not tested on a real Titan yet. Leave this on “No root” unless you want to experiment.");
+        RadioGroup rg = new RadioGroup(this);
+        RadioButton rNo = new RadioButton(this);
+        rNo.setText("No root (recommended)");
+        rNo.setId(View.generateViewId());
+        RadioButton rRoot = new RadioButton(this);
+        rRoot.setText("Root (su): typing and pointer at the same time");
+        rRoot.setId(View.generateViewId());
+        RadioButton rAdb = new RadioButton(this);
+        rAdb.setText("ADB helper: like root, started from a computer");
+        rAdb.setId(View.generateViewId());
+        rg.addView(rNo);
+        rg.addView(rRoot);
+        rg.addView(rAdb);
+        String mode = prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT);
+        rg.check("adb".equals(mode) ? rAdb.getId() : "root".equals(mode) ? rRoot.getId() : rNo.getId());
+        rg.setOnCheckedChangeListener((g, id) -> {
+            prefs.edit().putString(Prefs.MODE, id == rAdb.getId() ? "adb" : id == rRoot.getId() ? "root" : Prefs.MODE_NOROOT).apply();
+            refresh();
+            boolean helper = id != rNo.getId();
+            link.setOpen(OWNER, helper && prefs.getString(Prefs.DEVICE, null) != null);
+            link.restart();
+        });
+        root.addView(rg);
+
+        rootBox = new LinearLayout(this);
+        rootBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(rootBox);
+        root = rootBox;
+        hint("A tiny helper reads the raw sensor directly, so typing keeps working while the pointer is on. "
+                + "Root asks for su; the ADB helper is started from a computer once per boot.");
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        adbBox = box;
+        root.addView(box);
+        TextView t = new TextView(this);
+        t.setText("Enable USB debugging, connect a computer and run this once after every reboot:");
+        box.addView(t);
+        adbCommand = new TextView(this);
+        adbCommand.setTypeface(Typeface.MONOSPACE);
+        adbCommand.setTextIsSelectable(true);
+        adbCommand.setTextSize(12);
+        adbCommand.setPadding(0, (int) (6 * dp), 0, (int) (6 * dp));
+        box.addView(adbCommand);
+        Button copy = new Button(this);
+        copy.setText("Copy command");
+        copy.setOnClickListener(v -> {
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(ClipData.newPlainText("adb", adbCommand.getText()));
+            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+        });
+        box.addView(copy);
+
+        linkStatus = text("");
+        linkStatus.setTypeface(Typeface.DEFAULT_BOLD);
+
+        // --- Device
+        section("Pick the keyboard touch device");
+        deviceText = text("");
+        button("Find devices", v -> {
+            Toast.makeText(this, "Scanning input devices…", Toast.LENGTH_SHORT).show();
+            link.requestDeviceList();
+        });
+        grabSwitch = switchPref(Prefs.GRAB, "Exclusive access while pointer mode is on", false);
+        hint("Stops Android and the Titan's own keyboard scrolling from also reacting to your swipes. "
+                + "Don't use it if the chosen device is also the screen or the keys (the app warns you).");
+
+        // --- Test
+        section("Test & calibrate");
+        hint("Touch the keyboard: dots should follow your fingers. If the device reports more than the keyboard "
+                + "(for example it is the main touchscreen), calibrate to limit it to the keyboard area.");
+        testPad = new TestPadView(this);
+        testTracker = new TouchTracker(testPad);
+        root.addView(testPad, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout row = new LinearLayout(this);
+        calibrateButton = new Button(this);
+        calibrateButton.setText("Calibrate area");
+        calibrateButton.setOnClickListener(v -> {
+            if (calibrateButton.getTag() == null) {
+                calibrateButton.setTag("on");
+                calibrateButton.setText("Finish calibration");
+                testPad.startCalibration();
+            } else {
+                finishCalibration(true);
+            }
+        });
+        row.addView(calibrateButton);
+        root.addView(row);
+        zoneSwitch = switchPref(Prefs.ZONE_ON, "Only use the calibrated area", false);
+
+        root = advOuter;
 
         // --- Diagnostics
         section("Diagnostics");
@@ -387,6 +413,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         boolean noRoot = Prefs.MODE_NOROOT.equals(mode);
         noRootBox.setVisibility(noRoot ? View.VISIBLE : View.GONE);
         rootBox.setVisibility(noRoot ? View.GONE : View.VISIBLE);
+        helperNote.setVisibility(noRoot ? View.GONE : View.VISIBLE);
         adbBox.setVisibility("adb".equals(mode) ? View.VISIBLE : View.GONE);
         adbCommand.setText(adbCommandText());
 
@@ -453,7 +480,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     @Override
     public void onDeviceList(List<InputDeviceInfo> devices) {
         if (devices == null) {
-            Toast.makeText(this, "Could not reach the helper. Check step 2.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Could not reach the helper. Check Advanced: root / ADB.", Toast.LENGTH_LONG).show();
             return;
         }
         final List<InputDeviceInfo> c = new ArrayList<>();
