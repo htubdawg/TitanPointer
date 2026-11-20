@@ -221,6 +221,24 @@ the property reads `yes` (read via SystemProperties.get reflection), polling eve
 clicks at the tap position; logs how long it waited or that it stayed `yes`. If it never resets by itself,
 no-root can't fix this; the click key remains the workaround.
 
+### Truth table (keep this; don't make the user repeat results)
+Rule: a keyboard-surface touch sets `debug.sf.forcescroll_view`=yes; only a real key press sets it to no; the
+Titan's View.onTouchEvent refuses taps on standard Views while it's yes.
+| What | Key press just before the click? | Switch at click | Result |
+|---|---|---|---|
+| pad tap | no | yes | fails |
+| pad tap, tap-drag off | no | yes | fails |
+| pad tap, click delayed 1 s | no | yes | fails |
+| pad tap, click held up to 3 s waiting for no (1.19) | no | stays yes | fails |
+| Enter alone | yes (itself) | no | works |
+| Enter while moving the pointer | yes (itself) | no | works |
+| scroll-mode tap, Space, Enter | yes | no | works |
+| pad tap with a letter pressed at the same moment | yes | no | works |
+| joystick app | no pad touch | never set | works |
+| web content / Compose | n/a | yes | works (doesn't use View.onTouchEvent) |
+No-root can't inject keys or set debug.* props; root/ADB mode could `setprop debug.sf.forcescroll_view no`
+before each click (not implemented).
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).
