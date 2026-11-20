@@ -222,7 +222,9 @@ clicks at the tap position; logs how long it waited or that it stayed `yes`. **R
 press** (every held click only went through right after an Enter), so taps did nothing; reverted in 1.20
 (clicks go out immediately again; the log still shows the switch value). Likely purpose: the scroll
 assistant turns keyboard swipes into fake screen touches (device 0, like accessibility taps), and the
-switch stops those from clicking; real finger touches (device 4) aren't affected. If it never resets by itself,
+switch stops those from clicking. **User test without TitanPointer at all: after scrolling a page with the
+keyboard, a real finger tap on the browser's address bar is refused too.** So it's purely the Titan's
+behaviour; TitanPointer only hits it because every pad-tap click follows a keyboard touch. If it never resets by itself,
 no-root can't fix this; the click key remains the workaround.
 
 ### Truth table (keep this; don't make the user repeat results)
