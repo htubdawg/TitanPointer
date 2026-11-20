@@ -135,6 +135,19 @@ widened to all with setServiceInfo during the watch, then restored; content chan
 handled click shows as VIEW_CLICKED from Firefox. Test switch `Prefs.TAP_DELAY_TEST` (Diagnostics,
 default off) delays pad-tap clicks by 1 s. Waiting on the user's log: tap vs Enter on the URL bar.
 
+## v1.13
+The 1.12 log: keyboard-tap click and Enter click both injected at the same point, both "completed"; Firefox
+opened its search dialog only for Enter (WINDOW_STATE_CHANGED ComponentDialog at +617 ms) and reported
+nothing for the tap. The "under the pointer" lines logged nothing (cause unknown). Ruled out by the user's
+tests: tap-drag delay, a 1 s delayed tap click, and a recent keyboard touch (scroll-mode tap then Enter
+works). Remember **every key press is also a touch on the surface** (the log shows the pad touch right after
+Enter). Firefox code checked further: `EngineViewScrollingGesturesBehavior` and `VerticalSwipeRefreshLayout`
+don't block taps; nothing checks touch mode/input mode/touchpad. The only code difference left was that each
+pad touch report calls `onPointerMove` → `updateViewLayout` on the cursor window even with zero movement
+(Enter's own pad touch is dropped as typing first). 1.13 skips relayouts when the position is unchanged.
+If the URL bar still ignores taps, nothing in TitanPointer differs between the two clicks: stop changing
+code for it unless the user asks (the user doesn't want more debugging rounds).
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

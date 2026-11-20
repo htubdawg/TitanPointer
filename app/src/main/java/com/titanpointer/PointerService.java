@@ -788,7 +788,12 @@ public final class PointerService extends AccessibilityService
 
     private void placeCursor() {
         if (cursor == null || !cursorShown || !cursorAttached) return;
+        int oldX = lp.x, oldY = lp.y;
         placeCursorParams();
+        // lp always holds the position last given to the window manager (addView or updateViewLayout),
+        // so an unchanged position needs no relayout. Taps on the keyboard report many zero-length
+        // moves; an Enter click relayouts nothing, and keyboard taps now don't either.
+        if (lp.x == oldX && lp.y == oldY) return;
         try {
             wm.updateViewLayout(cursor, lp);
         } catch (RuntimeException ignored) {
