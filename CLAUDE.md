@@ -114,6 +114,16 @@ the notification off. The user confirmed the v1.7 notes-app fix and the top-row 
   unnumbered) moved to a collapsible "Advanced: root / ADB (untested)" section above Diagnostics, expanded
   only if the mode is already root/adb. Section 2 is now "How it works" (shows a note when a helper mode is on).
 
+## v1.11
+User: in no-root mode, clicking couldn't open Firefox's URL bar, but text fields inside web pages worked.
+Likely cause, not confirmed with a log: Fenix's URL bar opens a separate search window (a DialogFragment),
+which can't take focus from our catcher or loses it when focus recovery takes it back. Fix: a click
+(`lastClickAt`, the click key or a tap) followed within 1.5 s by an editable field getting input focus
+(TYPE_VIEW_FOCUSED, now in the service config; notificationTimeout lowered 1000 → 100 ms) turns pointer mode
+off so the field gets focus and the keys. `regainFocus` checks the same thing before taking focus back.
+Setting `Prefs.CLICK_EXIT` (default on) in "How it works". Long press doesn't count (text selection
+menus). Logged in Diag ("clicked into a text field"). If the URL bar still fails, ask for the Diag log.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

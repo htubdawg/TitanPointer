@@ -117,6 +117,8 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 + "• Enter: click · Alt + Enter: long press (change under Keys)\n"
                 + "• Space: scroll mode on/off\n"
                 + "• Alt + Space: pointer mode on/off");
+        switchPref(Prefs.CLICK_EXIT, "Clicking into a text field turns pointer mode off", true);
+        hint("So you can type in it right away (keys can't reach a text field while pointer mode is on).");
         spinnerPref(Prefs.LETTERS, "Letter keys in pointer mode", new String[] {Prefs.LETTERS_NOTHING, Prefs.LETTERS_EXIT},
                 new String[] {"Do nothing", "Turn pointer mode off"}, Prefs.LETTERS_NOTHING);
         button("Open keyboard input probe", v -> startActivity(new Intent(this, ProbeActivity.class)));

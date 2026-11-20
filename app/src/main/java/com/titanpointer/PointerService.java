@@ -161,11 +161,51 @@ public final class PointerService extends AccessibilityService
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+            onViewFocused(event);
+            return;
+        }
         if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
         String w = event.getPackageName() + "/" + event.getClassName();
         if (w.equals(foreground)) return;
         foreground = w;
         if (active) Diag.log("window: " + w);
+    }
+
+    // ---- Clicking into a text field ----
+
+    /** When the last click was injected (uptime ms). */
+    private long lastClickAt = Long.MIN_VALUE / 2;
+    /** A text field that gets focus this soon after a click was clicked into. */
+    private static final long CLICK_FOCUS_MS = 1500;
+
+    private boolean clickedIntoTextFieldRecently() {
+        return active && isNoRoot(prefs) && prefs.getBoolean(Prefs.CLICK_EXIT, true)
+                && SystemClock.uptimeMillis() - lastClickAt < CLICK_FOCUS_MS;
+    }
+
+    /**
+     * In no-root mode our focus window takes every key, so a text field you click into can't be typed
+     * in, and some (Firefox's URL bar opens its own search window) close when they can't get focus.
+     * Turn pointer mode off instead so the field gets focus and the keys.
+     */
+    private void onViewFocused(AccessibilityEvent event) {
+        if (!clickedIntoTextFieldRecently()) return;
+        android.view.accessibility.AccessibilityNodeInfo s = event.getSource();
+        boolean editable = s != null && s.isEditable();
+        if (!editable) {
+            android.view.accessibility.AccessibilityNodeInfo f =
+                    findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT);
+            editable = f != null && f.isEditable();
+        }
+        if (!editable) return;
+        exitForTextField(String.valueOf(event.getPackageName()));
+    }
+
+    private void exitForTextField(String pkg) {
+        Diag.log("clicked into a text field (" + pkg + "): pointer mode off for typing");
+        lastClickAt = Long.MIN_VALUE / 2;
+        setPointerMode(false);
     }
 
     /** Last window reported by accessibility events, for the diagnostics log. */
@@ -366,6 +406,15 @@ public final class PointerService extends AccessibilityService
 
     private final Runnable regainFocus = () -> {
         if (!active || !usingCatcher || catcherFocused) return;
+        if (clickedIntoTextFieldRecently()) {
+            // The click opened a window with a text field (e.g. Firefox's search): let it keep the focus.
+            android.view.accessibility.AccessibilityNodeInfo f =
+                    findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT);
+            if (f != null && f.isEditable()) {
+                exitForTextField(String.valueOf(f.getPackageName()));
+                return;
+            }
+        }
         android.app.KeyguardManager km = getSystemService(android.app.KeyguardManager.class);
         if (km != null && km.isKeyguardLocked()) {
             Diag.log("screen locked: not taking focus back");
@@ -631,6 +680,7 @@ public final class PointerService extends AccessibilityService
         if (!active) return;
         setCursorVisible(true);
         flash();
+        lastClickAt = SystemClock.uptimeMillis();
         injector.tap(px, py);
     }
 
