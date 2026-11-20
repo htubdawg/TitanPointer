@@ -228,6 +228,7 @@ public final class PointerService extends AccessibilityService
         main.removeCallbacks(autoHide);
         main.removeCallbacks(liftScroll);
         main.removeCallbacks(delayedPadClick);
+        cancelScrollWait();
         main.removeCallbacks(timerKeyClick);
         trace.reset();
         scrollHeld = false;
@@ -653,7 +654,60 @@ public final class PointerService extends AccessibilityService
             main.postDelayed(delayedPadClick, 1000);
             return;
         }
-        click("tap on keyboard", true);
+        clickWhenTitanScrollOff("tap on keyboard");
+    }
+
+    // ---- The Titan's keyboard-scroll switch ----
+    // The Titan's scroll assistant (needed: without it the keyboard touches don't reach us) sets the system
+    // property debug.sf.forcescroll_view to "yes" when the keyboard surface is touched and back to "no" on a
+    // key press. While it is "yes", the phone's modified View.onTouchEvent refuses taps on standard buttons,
+    // so a keyboard-tap click is held until it reads "no". Apps can read but not set the property.
+
+    private static final String TITAN_SCROLL_PROP = "debug.sf.forcescroll_view";
+    private static final long SCROLL_WAIT_POLL_MS = 20, SCROLL_WAIT_MAX_MS = 3000;
+    private Runnable pendingScrollWait;
+
+    static String titanScrollProp() {
+        try {
+            Class<?> sp = Class.forName("android.os.SystemProperties");
+            return (String) sp.getMethod("get", String.class, String.class).invoke(null, TITAN_SCROLL_PROP, "");
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    private void clickWhenTitanScrollOff(final String source) {
+        cancelScrollWait();
+        if (!"yes".equals(titanScrollProp())) {
+            click(source, true);
+            return;
+        }
+        final float x = px, y = py;
+        final long start = SystemClock.uptimeMillis();
+        Diag.log("keyboard tap click held: " + TITAN_SCROLL_PROP + " is yes");
+        setCursorVisible(true);
+        flash();
+        pendingScrollWait = new Runnable() {
+            @Override
+            public void run() {
+                long waited = SystemClock.uptimeMillis() - start;
+                boolean off = !"yes".equals(titanScrollProp());
+                if (!off && waited < SCROLL_WAIT_MAX_MS) {
+                    main.postDelayed(this, SCROLL_WAIT_POLL_MS);
+                    return;
+                }
+                pendingScrollWait = null;
+                Diag.log(off ? TITAN_SCROLL_PROP + " went back to no after " + waited + " ms: clicking"
+                        : TITAN_SCROLL_PROP + " still yes after " + waited + " ms: clicking anyway");
+                clickAt(source + (off ? ", waited " + waited + " ms" : ", scroll switch stayed on"), true, x, y);
+            }
+        };
+        main.postDelayed(pendingScrollWait, SCROLL_WAIT_POLL_MS);
+    }
+
+    private void cancelScrollWait() {
+        if (pendingScrollWait != null) main.removeCallbacks(pendingScrollWait);
+        pendingScrollWait = null;
     }
 
     /** Android's touch mode as our focus window sees it (diagnostics). */
@@ -662,15 +716,20 @@ public final class PointerService extends AccessibilityService
         return c != null && c.isInTouchMode();
     }
 
-    private final Runnable delayedPadClick = () -> click("tap on keyboard, delayed 1 s for testing", true);
+    private final Runnable delayedPadClick = () -> clickWhenTitanScrollOff("tap on keyboard, delayed 1 s for testing");
     private final Runnable timerKeyClick = () -> click("click key, sent from a timer for testing", false);
 
     private void click(String source, boolean fromPad) {
+        clickAt(source, fromPad, px, py);
+    }
+
+    private void clickAt(String source, boolean fromPad, float x, float y) {
         if (!active) return;
         setCursorVisible(true);
         flash();
-        final int n = trace.click(source, fromPad, px, py, focusWindowTouchMode());
-        injector.tap(px, py, Diag.isEnabled() ? what -> trace.tapResult(n, what) : null);
+        final int n = trace.click(source, fromPad, x, y, focusWindowTouchMode());
+        if (Diag.isEnabled()) Diag.log("  " + TITAN_SCROLL_PROP + " = " + titanScrollProp());
+        injector.tap(x, y, Diag.isEnabled() ? what -> trace.tapResult(n, what) : null);
     }
 
     private void onLongPress() {

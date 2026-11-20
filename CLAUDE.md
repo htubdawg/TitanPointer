@@ -4,6 +4,8 @@ Android app that turns the original Unihertz Titan's touch-sensitive keyboard in
 on-screen pointer. Status at v1.2: the user reports the no-root mode is "mostly working".
 
 ## Working with this user
+- **The Titan's "scroll assistant" (keyboard scrolling) must stay ON: without it the pointer doesn't work at
+  all (keyboard touches don't reach TitanPointer). Never suggest turning it off.** The user has said this many times.
 - Usually on their phone: always **build the APK and send it** (SendUserFile, `display: attach`).
   Don't ask them to build. Keep `dist/TitanPointer-<version>.apk` current and bump
   `versionCode`/`versionName` in `app/build.gradle` for each APK you send.
@@ -213,10 +215,11 @@ The system property **`debug.sf.forcescroll_view`** is `yes` at every refused pa
 accepted Enter click (nothing else flips). It's the Titan's keyboard-scroll feature: a keyboard-surface touch
 sets it to `yes`, a key press sets it to `no`, and the Titan's modified `View.onTouchEvent` refuses touches
 while it's `yes` (Compose/web content don't use that code, so they work). Apps can't set `debug.*`
-properties (SELinux), so no-root TitanPointer can't reset it directly; root/ADB could (`setprop`). Next:
-the user checks whether turning off the Titan's keyboard scrolling (Titan 2 calls it "Scroll assistant",
-with a per-app "force" list; the original Titan's menu path is unconfirmed) keeps it `no` while the pad still
-reaches TitanPointer. Possible app change: show a warning when the property is `yes`.
+properties (SELinux), so no-root TitanPointer can't reset it directly; root/ADB could (`setprop`). The
+scroll assistant can't be turned off (the pointer needs it). **v1.19**: a keyboard-tap click is held while
+the property reads `yes` (read via SystemProperties.get reflection), polling every 20 ms up to 3 s, then
+clicks at the tap position; logs how long it waited or that it stayed `yes`. If it never resets by itself,
+no-root can't fix this; the click key remains the workaround.
 
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
