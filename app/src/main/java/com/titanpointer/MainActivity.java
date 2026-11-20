@@ -296,6 +296,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
             refresh();
         });
         switchPref(Prefs.TAP_DELAY_TEST, "Test: taps on the keyboard click 1 s late", false);
+        switchPref(Prefs.KEY_TIMER_TEST, "Test: send the click key's click from a timer", false);
         hint("For tracking down clicks that don't work. Leave off normally.");
         diagText = text("");
         diagText.setTypeface(Typeface.MONOSPACE);

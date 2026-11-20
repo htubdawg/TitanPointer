@@ -228,6 +228,7 @@ public final class PointerService extends AccessibilityService
         main.removeCallbacks(autoHide);
         main.removeCallbacks(liftScroll);
         main.removeCallbacks(delayedPadClick);
+        main.removeCallbacks(timerKeyClick);
         trace.reset();
         scrollHeld = false;
         if (cursor != null) cursor.setState(CursorView.STATE_NORMAL);
@@ -464,7 +465,12 @@ public final class PointerService extends AccessibilityService
             return true;
         }
         if (matches(event, Prefs.CLICK_KEY, Prefs.DEFAULT_CLICK_KEY, Prefs.CLICK_META, Prefs.DEFAULT_CLICK_META)) {
-            if (down && event.getRepeatCount() == 0) click("click key", false);
+            if (down && event.getRepeatCount() == 0) {
+                // Test: leave Android's key callback first and click from the main thread's queue, the
+                // way a keyboard tap's click is sent. No added delay.
+                if (prefs.getBoolean(Prefs.KEY_TIMER_TEST, false)) main.post(timerKeyClick);
+                else click("click key", false);
+            }
             return true;
         }
         switch (k) {
@@ -657,6 +663,7 @@ public final class PointerService extends AccessibilityService
     }
 
     private final Runnable delayedPadClick = () -> click("tap on keyboard, delayed 1 s for testing", true);
+    private final Runnable timerKeyClick = () -> click("click key, sent from a timer for testing", false);
 
     private void click(String source, boolean fromPad) {
         if (!active) return;

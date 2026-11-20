@@ -160,6 +160,15 @@ every event from other apps (types widened, notificationTimeout 0 during the wat
 the click, windows/element under the pointer (FLAG_RETRIEVE_INTERACTIVE_WINDOWS also set at runtime; logs the
 window count if none match) and the tap result. Diag keeps 600 lines. Waiting on the user's log.
 
+## v1.15
+1.14 log: pad-tap clicks and the Enter click land on Firefox's address bar (a View TextView "reddit.com",
+clickable/long-clickable); only Enter gets VIEW_CLICKED. Firefox sends no events during pad touches; touch
+mode and input focus never change. User: Enter shortly after moving the pointer works; **no toolbar button
+works with pad taps** (whole top toolbar, Firefox and Chrome). Chromium `ToolbarControlContainer` swallows
+toolbar taps when the toolbar view isn't VISIBLE, but that would hit Enter too. Last code difference: Enter
+clicks from inside `onKeyEvent`, pad taps from a Handler. Test switch `Prefs.KEY_TIMER_TEST` sends the click
+key's click via `main.post` (no delay). If Enter then fails on the toolbar, that's the cause.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).
