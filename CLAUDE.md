@@ -393,6 +393,11 @@ of raw Y: estimated from the photo's 10-key grid, unconfirmed), checked before t
 nothing; click zones unchanged. Pressing Space still toggles scroll mode (a press is also a key, which stops that touch's
 stick). Tap detection uses the landing point (`joyStart`), not the centre. Not yet tried on the phone.
 
+## v1.32
+Joystick mode section moved to the bottom of the Controls tab (user). Slider defaults: `MainActivity.MarkedSeekBar` draws a
+tick at the default value under the thumb (label colour at 60%). User chose this over reset buttons/long-press reset and
+explicitly said **no snapping** to the default (the − / + buttons get back to it).
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

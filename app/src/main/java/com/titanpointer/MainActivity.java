@@ -6,6 +6,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -1177,8 +1178,9 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         root.addView(t);
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        final SeekBar sb = new SeekBar(this);
+        final MarkedSeekBar sb = new MarkedSeekBar(this);
         sb.setMax(max - min);
+        sb.setMark(Math.max(min, Math.min(max, def)) - min, (t.getCurrentTextColor() & 0x00FFFFFF) | 0x99000000, dp);
         int cur = Math.max(min, Math.min(max, prefs.getInt(key, def)));
         sb.setProgress(cur - min);
         t.setText(label + ": " + fmt.f(cur));
@@ -1208,6 +1210,39 @@ public final class MainActivity extends Activity implements PadLink.Listener {
             sb.setProgress(Math.min(max, up) - min);
         }));
         root.addView(row);
+    }
+
+    /**
+     * A slider with a small tick on its track at the default value, so the way back to it is visible. Drawn under
+     * the thumb, so it's hidden while the slider sits on the default. No snapping.
+     */
+    static final class MarkedSeekBar extends SeekBar {
+        private int mark = -1;
+        private float dp = 1f;
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+        MarkedSeekBar(Context c) {
+            super(c);
+        }
+
+        void setMark(int progress, int color, float dp) {
+            mark = progress;
+            this.dp = dp;
+            paint.setColor(color);
+            invalidate();
+        }
+
+        @Override
+        protected synchronized void onDraw(Canvas c) {
+            if (mark >= 0 && getMax() > 0) {
+                float left = getPaddingLeft(), right = getWidth() - getPaddingRight();
+                float x = left + (right - left) * mark / getMax();
+                float cy = getPaddingTop() + (getHeight() - getPaddingTop() - getPaddingBottom()) / 2f;
+                float h = 8 * dp, w = 1.5f * dp;
+                c.drawRect(x - w / 2, cy - h, x + w / 2, cy + h, paint);
+            }
+            super.onDraw(c);
+        }
     }
 
     /** A small square button that runs {@code action} once per tap and repeatedly while held. */

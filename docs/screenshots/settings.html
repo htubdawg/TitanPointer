@@ -69,6 +69,7 @@
   .seek .track { position: relative; height: 32px; margin: 0 16px; }
   .seek .line { position: absolute; left: 0; right: 0; top: 15px; height: 2px; background: rgba(0,0,0,.26); }
   .seek .fill { position: absolute; left: 0; top: 15px; height: 2px; background: var(--accent); }
+  .seek .mark { position: absolute; top: 8px; width: 2px; height: 16px; margin-left: -1px; background: rgba(0,0,0,.54); }
   .seek .knob { position: absolute; top: 10px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent); }
   .spinner { display: flex; align-items: center; padding: 4px 0; }
   .spinner .lbl { flex: 1; font-size: 15px; color: var(--text-secondary); }
@@ -85,7 +86,7 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M2 22h20V2z"/></svg>
     <svg width="9" height="14" viewBox="0 0 10 16" fill="#fff"><rect x="3" y="0" width="4" height="2"/><rect x="0" y="2" width="10" height="14" rx="1"/></svg>
   </span></div>
-  <div class="bar"><div>TitanPointer</div><div class="sub">Version 1.31</div></div>
+  <div class="bar"><div>TitanPointer</div><div class="sub">Version 1.32</div></div>
   <div class="tabs" id="tabs"></div>
   <div class="scroll" id="scroll"><div class="content" id="content"></div></div>
 </div>
@@ -101,7 +102,7 @@
   const sw = (label, on) => add(`<div class="switch"><span class="lbl">${label}</span><span class="sw ${on ? 'on' : ''}"><span class="track"></span><span class="thumb"></span></span></div>`);
   const seek = (label, min, max, def, fmt) => {
     const f = (def - min) / (max - min) * 100;
-    add(`<div class="seek"><div class="lbl">${label}: ${fmt(def)}</div><div class="ctl"><div class="step"><span>−</span></div><div class="track"><div class="line"></div><div class="fill" style="width:${f}%"></div><div class="knob" style="left:${f}%"></div></div><div class="step"><span>+</span></div></div></div>`);
+    add(`<div class="seek"><div class="lbl">${label}: ${fmt(def)}</div><div class="ctl"><div class="step"><span>−</span></div><div class="track"><div class="line"></div><div class="mark" style="left:${f}%"></div><div class="fill" style="width:${f}%"></div><div class="knob" style="left:${f}%"></div></div><div class="step"><span>+</span></div></div></div>`);
   };
   const spinner = (label, val) => add(`<div class="spinner"><span class="lbl">${label}</span><span class="val">${val}</span></div>`);
   const keyBinding = (label, desc) => { text(`${label}: ${desc}`); add(`<div class="row">${button('Set')}${button('Clear')}${button('Default')}</div>`); };
@@ -229,7 +230,7 @@
     },
     () => {
       section('TitanPointer');
-      text('Version 1.31 (build 32)');
+      text('Version 1.32 (build 33)');
       hint('Turns the original Unihertz Titan’s touch-sensitive keyboard into a touchpad with an on-screen pointer. Nothing is collected or sent anywhere.');
       section('Source code and updates');
       text('https://github.com/htubdawg/TitanPointer');
