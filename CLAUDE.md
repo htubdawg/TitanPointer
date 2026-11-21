@@ -346,16 +346,20 @@ User: things were still logged with Capture diagnostics off. The tap test screen
 `Diag` on without setting `Prefs.DIAG`, so the switch said off while capturing (and the log showed). Both now set the
 pref (switch follows; `refresh()` syncs it). Logcat (`Log.w/d`) and the input probe's own log are separate and untouched.
 
-## v1.27: pointer look
-User asked for pointer choices + a custom one; chose shapes **with a colour picker**, and for custom images a simple
-**top-left / centre** click point (not tap-to-set). `PointerShape` draws everything (CursorView and the settings
-previews): Arrow, Hand, Crosshair, Dot, Ring in a 24-unit box (1 unit = 1 dp × size), fill from 8 swatches, outline
-black or white by brightness; hotspot = tip (arrow, hand) or centre. Custom: ACTION_OPEN_DOCUMENT image, shrunk to
-≤256 px, saved as `filesDir/cursor_custom.png`; longest side drawn at 24 dp × size. Prefs `cursor_style`,
-`cursor_color`, `cursor_hotspot`, `cursor_image_ver` (bumped on import so the service reloads). Click/scroll ring:
-behind the tip for tip shapes, small on top for centred ones. CursorView now has hotspotX/hotspotY. Pointer tab order:
-Pointer look (preview on light/dark, tiles, colours, custom box, size, hide when idle), Movement, Direction.
-settings.html draws the shapes with the same geometry (`drawShape`).
+## v1.27–1.28: pointer look
+User asked for pointer choices + a custom one: colour picker yes; custom image click point = simple top-left/centre.
+1.27's code-drawn vector shapes were rejected ("atrocious", wanted **retro**, sourced from a Linux distro). **1.28** uses
+23 glyphs from the X11 cursor font (xorg font-cursor-misc, "These glyphs are unencumbered"; got it from Debian's
+xfonts-base via apt, since gitlab.freedesktop.org is blocked here; pcf2bdf). `scripts/retro-cursors.py` turns the BDF
+into `RetroCursors.java` (shape merged with mask: `#` fg in the chosen colour, `o` outline in black/white by contrast,
+hotspot = glyph origin, which the user specifically cares about). `PointerShape` renders a glyph to a 1:1 bitmap and
+draws it unfiltered at round(1.5 dp × size) px per glyph pixel; hotspot = middle of the hotspot pixel. Custom image
+(ACTION_OPEN_DOCUMENT, ≤256 px, `filesDir/cursor_custom.png`): longest side 24 dp × size, drawn crisp if small and
+blown up ≥2×. Prefs `cursor_look` (glyph id or `custom`, default `left_ptr`), `cursor_tint` (default black),
+`cursor_hotspot`, `cursor_image_ver` (new keys so 1.27's values don't carry over). Click/scroll ring behind the
+hotspot when it's at the edge, small on top otherwise. Pointer tab: Pointer look (preview on light/dark, 6-column
+glyph grid + Custom, colours, custom box, size, hide when idle), Movement, Direction. render.js reads the glyphs from
+RetroCursors.java into settings.html.
 
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge

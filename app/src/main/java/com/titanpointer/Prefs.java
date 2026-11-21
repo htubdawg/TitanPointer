@@ -38,7 +38,7 @@ public final class Prefs {
     public static final String AUTOHIDE_S = "autohide_s";
     public static final String CURSOR_SIZE = "cursor_size";
     /** Pointer look: a {@link PointerShape} style, its fill colour, and the custom image's click point. */
-    public static final String CURSOR_STYLE = "cursor_style", CURSOR_COLOR = "cursor_color",
+    public static final String CURSOR_STYLE = "cursor_look", CURSOR_COLOR = "cursor_tint",
             CURSOR_HOTSPOT = "cursor_hotspot";
     /** Bumped whenever a new custom pointer image is saved, so the service reloads it. */
     public static final String CURSOR_IMAGE_VER = "cursor_image_ver";

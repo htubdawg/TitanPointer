@@ -10,14 +10,14 @@ touchpad with an on-screen mouse pointer. No root needed.
 
 <p>
   <img src="docs/images/settings-1.png" width="32%" alt="Home tab: service status, pointer mode switch, scroll assistant status, gestures and keys">
-  <img src="docs/images/settings-2.png" width="32%" alt="Pointer tab: pointer look (shapes, colours, custom image), size, speed">
+  <img src="docs/images/settings-2.png" width="32%" alt="Pointer tab: classic X11 pixel cursors, colours, custom image">
   <img src="docs/images/settings-3.png" width="32%" alt="Controls tab: clicking, including clicking standard buttons directly">
   <img src="docs/images/settings-4.png" width="32%" alt="Controls tab: click, long-press and toggle keys">
   <img src="docs/images/settings-5.png" width="32%" alt="Tools tab: keyboard input probe, advanced root/ADB, diagnostics">
   <img src="docs/images/settings-6.png" width="32%" alt="About tab: version and GitHub links">
 </p>
 
-<sub>The settings screen (1.27) at the Titan's 1440 × 1440 resolution, with default settings: tabs Home, Pointer,
+<sub>The settings screen (1.28) at the Titan's 1440 × 1440 resolution, with default settings: tabs Home, Pointer,
 Controls, Tools and About. Every slider has − and + buttons for fine steps (hold to repeat). These are renderings of
 the app's layout (<code>docs/screenshots/</code>, made with <code>node docs/screenshots/render.js</code>), not
 captures from a phone.</sub>
@@ -48,9 +48,12 @@ captures from a phone.</sub>
 - Touches during and just after a key press don't move the pointer or click.
 - Pointer mode can also be switched with the Quick Settings tile **Keyboard pointer** or the switch in
   the app.
-- **Pointer look** (Pointer tab): arrow, hand, crosshair, dot or ring in one of eight colours (the outline
-  switches between black and white to stay visible), or your own picture (PNG, JPG, WebP, GIF) with the click
-  point at its top-left corner or centre. The size slider scales all of them.
+- **Pointer look** (Pointer tab): 23 classic pixel cursors from the X Window System cursor font (the original
+  Unix/Linux pointers: arrows, hands, crosshairs, and oddities like the pirate, coffee mug and gumby), drawn
+  crisp with each glyph's own click point. Pick one of eight colours (the outline flips black/white to stay
+  visible), or use your own picture (PNG, JPG, WebP, GIF) with the click point at its top-left corner or centre.
+  The size slider scales all of them. The glyphs come from xorg's font-cursor-misc ("These glyphs are
+  unencumbered"); `scripts/retro-cursors.py` regenerates them.
 - The Titan's scroll assistant must be on for the pointer to see keyboard touches. The Home tab shows whether
   it is; turning pointer mode on (or opening the keyboard input probe) switches it on if TitanPointer has the
   permission below, and warns you otherwise.
@@ -92,7 +95,7 @@ The scroll assistant is Settings.Global `touchpad_switch_value` (1 on, 0 off); t
 ## Install
 
 1. Install the APK from the [latest release](https://github.com/htubdawg/titanpointer/releases/latest)
-   (or [`dist/TitanPointer-1.27.apk`](dist/TitanPointer-1.27.apk) in this repository).
+   (or [`dist/TitanPointer-1.28.apk`](dist/TitanPointer-1.28.apk) in this repository).
 2. Open **TitanPointer** and turn on its accessibility service (Settings → Accessibility → TitanPointer).
    It draws the pointer, sends taps and swipes at the pointer, and reads key presses for the shortcuts.
    Nothing is collected or sent anywhere.

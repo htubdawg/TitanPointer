@@ -232,27 +232,37 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         section("Pointer look");
         lookPreview = new LookView(true);
         root.addView(lookPreview, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (72 * dp)));
-        LinearLayout tiles = new LinearLayout(this);
-        tiles.setPadding(0, (int) (8 * dp), 0, 0);
-        for (int i = 0; i < PointerShape.STYLES.length; i++) {
-            final String style = PointerShape.STYLES[i];
+        hint("Classic cursors from the X Window System (the original Unix/Linux pointer font), or your own picture.");
+        int count = RetroCursors.ALL.length + 1;
+        final int perRow = 6;
+        LinearLayout tiles = null;
+        for (int i = 0; i < count; i++) {
+            final boolean isCustom = i == RetroCursors.ALL.length;
+            final String style = isCustom ? PointerShape.CUSTOM : RetroCursors.ALL[i].id;
+            String label = isCustom ? "Custom" : RetroCursors.ALL[i].label;
+            if (i % perRow == 0) {
+                tiles = new LinearLayout(this);
+                tiles.setPadding(0, (int) (4 * dp), 0, 0);
+                root.addView(tiles);
+            }
             LinearLayout tile = new LinearLayout(this);
             tile.setOrientation(LinearLayout.VERTICAL);
             tile.setGravity(Gravity.CENTER_HORIZONTAL);
             tile.setPadding(0, (int) (4 * dp), 0, (int) (4 * dp));
             tile.setClickable(true);
             tile.setFocusable(true);
-            tile.setContentDescription(PointerShape.STYLE_NAMES[i]);
+            tile.setContentDescription(label + " pointer");
             LookView v = new LookView(false);
             v.style = style;
-            tile.addView(v, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (48 * dp)));
+            tile.addView(v, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (44 * dp)));
             TextView name = new TextView(this);
-            name.setText(PointerShape.STYLE_NAMES[i].replace(" image", ""));
+            name.setText(label);
             name.setTextSize(12);
+            name.setSingleLine(true);
             name.setGravity(Gravity.CENTER);
             tile.addView(name);
             tile.setOnClickListener(x -> {
-                if (PointerShape.CUSTOM.equals(style) && customImage == null) {
+                if (isCustom && customImage == null) {
                     pickImage();
                     return;
                 }
@@ -263,7 +273,6 @@ public final class MainActivity extends Activity implements PadLink.Listener {
             tiles.addView(tile, tlp);
             lookTiles.add(v);
         }
-        root.addView(tiles);
 
         colorRow = new LinearLayout(this);
         colorRow.setOrientation(LinearLayout.VERTICAL);
@@ -339,10 +348,12 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     };
 
     private void updateLook() {
-        String style = prefs.getString(Prefs.CURSOR_STYLE, PointerShape.ARROW);
-        if (PointerShape.CUSTOM.equals(style) && customImage == null) style = PointerShape.ARROW;
+        String style = prefs.getString(Prefs.CURSOR_STYLE, PointerShape.DEFAULT);
+        if (PointerShape.CUSTOM.equals(style) ? customImage == null : RetroCursors.find(style) == null) {
+            style = PointerShape.DEFAULT;
+        }
         boolean custom = PointerShape.CUSTOM.equals(style);
-        int color = prefs.getInt(Prefs.CURSOR_COLOR, Color.WHITE);
+        int color = prefs.getInt(Prefs.CURSOR_COLOR, PointerShape.DEFAULT_COLOR);
         boolean centered = PointerShape.HOT_CENTER.equals(prefs.getString(Prefs.CURSOR_HOTSPOT, PointerShape.HOT_TOP_LEFT));
         lookPreview.style = style;
         lookPreview.update(color, prefs.getInt(Prefs.CURSOR_SIZE, 10) / 10f, centered);
@@ -436,7 +447,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     /** Draws one pointer look, centred. The big preview shows it on a light and a dark half. */
     private final class LookView extends View {
         final boolean twoTone;
-        String style = PointerShape.ARROW;
+        String style = PointerShape.DEFAULT;
         final PointerShape shape = new PointerShape(MainActivity.this);
         final android.graphics.Paint bg = new android.graphics.Paint();
         final android.graphics.Paint plus = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
@@ -451,7 +462,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
         void update(int color, float scale, boolean centered) {
             boolean custom = PointerShape.CUSTOM.equals(style);
-            shape.set(custom && customImage == null ? PointerShape.ARROW : style, color, scale,
+            shape.set(style, color, scale,
                     custom ? customImage : null, centered);
             invalidate();
         }

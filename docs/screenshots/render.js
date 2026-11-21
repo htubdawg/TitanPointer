@@ -5,6 +5,11 @@ const path = require('path');
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 480, height: 480 }, deviceScaleFactor: 3 });
+  // The pointer glyphs come from the app's own data file.
+  const src = require('fs').readFileSync(path.join(__dirname, '../../app/src/main/java/com/titanpointer/RetroCursors.java'), 'utf8');
+  const glyphs = [...src.matchAll(/new Glyph\("(\w+)", "([^"]+)", (\d+), (\d+),([^)]*)\)/g)].map((m) => (
+    { id: m[1], label: m[2], hx: +m[3], hy: +m[4], rows: [...m[5].matchAll(/"([.o#]+)"/g)].map((r) => r[1]) }));
+  await page.addInitScript((g) => { window.GLYPHS = g; }, glyphs);
   await page.goto('file://' + path.join(__dirname, 'settings.html'));
   await page.evaluate(() => document.fonts.ready);
   // Each shot opens a tab and, optionally, scrolls so that a section heading is near the top.
