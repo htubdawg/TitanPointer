@@ -372,7 +372,7 @@ requestDisallowInterceptTouchEvent on DOWN so drags inside scroll the box, and s
 Glyph order: pointer-like first (`FIRST` in scripts/retro-cursors.py), the rest in font order; labels in `LABELS`.
 
 ## Open items / ideas
-- Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
+- Rejected by the user (don't suggest again): a LICENSE file ("doesn't believe in licenses"), haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).
 - **Planned for later: make TitanPointer a keyboard app (IME).** Agreed with the user as the fix for typing while
   pointer mode is on in no-root mode. An IME gets the hardware keys while a text field is focused and can
