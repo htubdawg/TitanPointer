@@ -341,6 +341,11 @@ touch doesn't change the switch; `adb shell setprop debug.sf.forcescroll_view no
   "agui"/"led" (package name never confirmed), else opens Settings.
 - `docs/screenshots/settings.html` now has `showTab(i)`; render.js makes settings-1..6.png.
 
+## v1.26
+User: things were still logged with Capture diagnostics off. The tap test screen and the software search turned
+`Diag` on without setting `Prefs.DIAG`, so the switch said off while capturing (and the log showed). Both now set the
+pref (switch follows; `refresh()` syncs it). Logcat (`Log.w/d`) and the input probe's own log are separate and untouched.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

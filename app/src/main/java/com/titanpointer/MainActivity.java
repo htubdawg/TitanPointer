@@ -399,7 +399,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         section("Diagnostics");
         hint("What the pointer saw recently: focus changes, which windows opened, keys and where they came from. "
                 + "If the pointer stops working somewhere, reproduce it, come back here and copy this.");
-        Switch diagSwitch = switchPref(Prefs.DIAG, "Capture diagnostics", false);
+        diagSwitch = switchPref(Prefs.DIAG, "Capture diagnostics", false);
         diagSwitch.setOnCheckedChangeListener((v, on) -> {
             if (prefs.getBoolean(Prefs.DIAG, false) != on) prefs.edit().putBoolean(Prefs.DIAG, on).apply();
             Diag.setEnabled(on);
@@ -407,7 +407,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         });
         button("Open tap test screen", v -> startActivity(new Intent(this, TapTestActivity.class)));
         button("Search phone software for the scroll switch", v -> {
-            Diag.setEnabled(true);
+            diagSwitch.setChecked(true); // the search logs into diagnostics: turn capturing on visibly
             v.setEnabled(false);
             Toast.makeText(this, "Searching… this can take a minute", Toast.LENGTH_LONG).show();
             new Thread(() -> FrameworkScan.run(msg -> runOnUiThread(() -> {
@@ -525,6 +525,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     }
 
     private TextView diagText;
+    private Switch diagSwitch;
     private View diagButtons;
 
     private void finishCalibration(boolean save) {
@@ -647,6 +648,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         for (Runnable r : keyLabels) r.run();
         if (diagText != null) {
             boolean on = Diag.isEnabled();
+            diagSwitch.setChecked(prefs.getBoolean(Prefs.DIAG, false));
             diagText.setText(Diag.dump());
             diagText.setVisibility(on ? View.VISIBLE : View.GONE);
             diagButtons.setVisibility(on ? View.VISIBLE : View.GONE);
