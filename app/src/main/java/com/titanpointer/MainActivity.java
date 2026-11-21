@@ -6,6 +6,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
@@ -154,6 +155,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     protected void onResume() {
         super.onResume();
         link.addListener(this);
+        prefs.registerOnSharedPreferenceChangeListener(lookListener);
         link.setOpen(OWNER, prefs.getString(Prefs.DEVICE, null) != null
                 && !Prefs.MODE_NOROOT.equals(prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT)));
         refresh();
@@ -176,6 +178,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     protected void onPause() {
         super.onPause();
         ui.removeCallbacks(grantWatch);
+        prefs.unregisterOnSharedPreferenceChangeListener(lookListener);
         link.setOpen(OWNER, false);
         link.removeListener(this);
         if (calibrateButton != null && testPad != null) finishCalibration(false);
@@ -226,17 +229,299 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
     private void buildPointer() {
         root = pageBodies[POINTER];
+        section("Pointer look");
+        lookPreview = new LookView(true);
+        root.addView(lookPreview, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (72 * dp)));
+        LinearLayout tiles = new LinearLayout(this);
+        tiles.setPadding(0, (int) (8 * dp), 0, 0);
+        for (int i = 0; i < PointerShape.STYLES.length; i++) {
+            final String style = PointerShape.STYLES[i];
+            LinearLayout tile = new LinearLayout(this);
+            tile.setOrientation(LinearLayout.VERTICAL);
+            tile.setGravity(Gravity.CENTER_HORIZONTAL);
+            tile.setPadding(0, (int) (4 * dp), 0, (int) (4 * dp));
+            tile.setClickable(true);
+            tile.setFocusable(true);
+            tile.setContentDescription(PointerShape.STYLE_NAMES[i]);
+            LookView v = new LookView(false);
+            v.style = style;
+            tile.addView(v, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (48 * dp)));
+            TextView name = new TextView(this);
+            name.setText(PointerShape.STYLE_NAMES[i].replace(" image", ""));
+            name.setTextSize(12);
+            name.setGravity(Gravity.CENTER);
+            tile.addView(name);
+            tile.setOnClickListener(x -> {
+                if (PointerShape.CUSTOM.equals(style) && customImage == null) {
+                    pickImage();
+                    return;
+                }
+                prefs.edit().putString(Prefs.CURSOR_STYLE, style).apply();
+            });
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            tlp.setMargins((int) (2 * dp), 0, (int) (2 * dp), 0);
+            tiles.addView(tile, tlp);
+            lookTiles.add(v);
+        }
+        root.addView(tiles);
+
+        colorRow = new LinearLayout(this);
+        colorRow.setOrientation(LinearLayout.VERTICAL);
+        TextView cl = new TextView(this);
+        cl.setText("Colour");
+        cl.setTextSize(15);
+        cl.setPadding(0, (int) (10 * dp), 0, (int) (4 * dp));
+        colorRow.addView(cl);
+        LinearLayout swatches = new LinearLayout(this);
+        for (final int color : PointerShape.COLORS) {
+            Swatch sw = new Swatch(color);
+            sw.setOnClickListener(x -> prefs.edit().putInt(Prefs.CURSOR_COLOR, color).apply());
+            swatches.addView(sw, new LinearLayout.LayoutParams(0, (int) (44 * dp), 1f));
+            this.swatches.add(sw);
+        }
+        colorRow.addView(swatches);
+        root.addView(colorRow);
+
+        customBox = new LinearLayout(this);
+        customBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(customBox);
+        LinearLayout outer = root;
+        root = customBox;
+        button("Choose another image", x -> pickImage());
+        TextView hl = text("Click point");
+        hl.setPadding(0, (int) (8 * dp), 0, 0);
+        hotspotGroup = new RadioGroup(this);
+        RadioButton rTl = new RadioButton(this);
+        rTl.setText("Top-left corner (for arrows)");
+        rTl.setId(View.generateViewId());
+        RadioButton rC = new RadioButton(this);
+        rC.setText("Centre (for dots, rings and crosshairs)");
+        rC.setId(View.generateViewId());
+        hotspotGroup.addView(rTl);
+        hotspotGroup.addView(rC);
+        hotspotGroup.check(PointerShape.HOT_CENTER.equals(prefs.getString(Prefs.CURSOR_HOTSPOT, PointerShape.HOT_TOP_LEFT))
+                ? rC.getId() : rTl.getId());
+        hotspotGroup.setOnCheckedChangeListener((g, id) -> prefs.edit().putString(Prefs.CURSOR_HOTSPOT,
+                id == rC.getId() ? PointerShape.HOT_CENTER : PointerShape.HOT_TOP_LEFT).apply());
+        root.addView(hotspotGroup);
+        hint("Any PNG, JPG, WebP or GIF picture; transparent PNGs look best. The size slider below scales it.");
+        root = outer;
+
+        seekPref(Prefs.CURSOR_SIZE, "Pointer size", 6, 30, 10, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
+        seekPref(Prefs.AUTOHIDE_S, "Hide pointer when idle", 0, 30, 5, 1, v -> v == 0 ? "never" : v + " s");
+
+        section("Movement");
+        seekPref(Prefs.SENS, "Speed", Prefs.SENS_MIN, Prefs.SENS_MAX, Prefs.SENS_DEFAULT, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
+        seekPref(Prefs.ACCEL, "Acceleration", 0, 40, 10, 1, v -> String.format(Locale.US, "%.1f", v / 10f));
+        seekPref(Prefs.YSPEED, "Vertical speed", 3, 40, 10, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
+
         section("Direction");
         switchPref(Prefs.SWAP, "Swap X and Y", false);
         switchPref(Prefs.INV_X, "Invert horizontal", false);
         switchPref(Prefs.INV_Y, "Invert vertical", false);
 
-        section("Pointer");
-        seekPref(Prefs.SENS, "Speed", Prefs.SENS_MIN, Prefs.SENS_MAX, Prefs.SENS_DEFAULT, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
-        seekPref(Prefs.ACCEL, "Acceleration", 0, 40, 10, 1, v -> String.format(Locale.US, "%.1f", v / 10f));
-        seekPref(Prefs.YSPEED, "Vertical speed", 3, 40, 10, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
-        seekPref(Prefs.CURSOR_SIZE, "Pointer size", 6, 30, 10, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
-        seekPref(Prefs.AUTOHIDE_S, "Hide pointer when idle", 0, 30, 5, 1, v -> v == 0 ? "never" : v + " s");
+        customImage = PointerShape.loadCustom(this);
+        updateLook();
+    }
+
+    // ---------------------------------------------------------------- pointer look
+
+    private static final int PICK_IMAGE = 42;
+    private LookView lookPreview;
+    private final List<LookView> lookTiles = new ArrayList<>();
+    private final List<Swatch> swatches = new ArrayList<>();
+    private LinearLayout colorRow, customBox;
+    private RadioGroup hotspotGroup;
+    private android.graphics.Bitmap customImage;
+
+    private final SharedPreferences.OnSharedPreferenceChangeListener lookListener = (p, key) -> {
+        if (key != null && key.startsWith("cursor_")) updateLook();
+    };
+
+    private void updateLook() {
+        String style = prefs.getString(Prefs.CURSOR_STYLE, PointerShape.ARROW);
+        if (PointerShape.CUSTOM.equals(style) && customImage == null) style = PointerShape.ARROW;
+        boolean custom = PointerShape.CUSTOM.equals(style);
+        int color = prefs.getInt(Prefs.CURSOR_COLOR, Color.WHITE);
+        boolean centered = PointerShape.HOT_CENTER.equals(prefs.getString(Prefs.CURSOR_HOTSPOT, PointerShape.HOT_TOP_LEFT));
+        lookPreview.style = style;
+        lookPreview.update(color, prefs.getInt(Prefs.CURSOR_SIZE, 10) / 10f, centered);
+        for (LookView v : lookTiles) {
+            v.update(color, 1f, centered);
+            boolean sel = v.style.equals(style);
+            View tile = (View) v.getParent();
+            tile.setBackground(sel ? selectedBackground() : null);
+            tile.setSelected(sel);
+        }
+        for (Swatch s : swatches) s.setChosen(s.color == color);
+        colorRow.setVisibility(custom ? View.GONE : View.VISIBLE);
+        customBox.setVisibility(custom ? View.VISIBLE : View.GONE);
+    }
+
+    private android.graphics.drawable.Drawable selectedBackground() {
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setCornerRadius(6 * dp);
+        d.setStroke((int) (2 * dp), themeColor(android.R.attr.colorAccent, 0xFF2196F3));
+        return d;
+    }
+
+    private void pickImage() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("image/*");
+        try {
+            startActivityForResult(i, PICK_IMAGE);
+        } catch (RuntimeException e) {
+            Toast.makeText(this, "No file picker found", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != PICK_IMAGE || result != RESULT_OK || data == null || data.getData() == null) return;
+        final Uri uri = data.getData();
+        new Thread(() -> {
+            android.graphics.Bitmap b = importImage(uri);
+            runOnUiThread(() -> {
+                if (b == null) {
+                    Toast.makeText(this, "Couldn't read that image", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                customImage = b;
+                prefs.edit().putString(Prefs.CURSOR_STYLE, PointerShape.CUSTOM)
+                        .putLong(Prefs.CURSOR_IMAGE_VER, System.currentTimeMillis()).apply();
+                updateLook();
+            });
+        }, "pointer-image").start();
+    }
+
+    /** Decodes the picked image, shrinks it to at most CUSTOM_MAX_PX and saves it as the custom pointer. */
+    private android.graphics.Bitmap importImage(Uri uri) {
+        try {
+            android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+            o.inJustDecodeBounds = true;
+            try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+                android.graphics.BitmapFactory.decodeStream(in, null, o);
+            }
+            if (o.outWidth <= 0 || o.outHeight <= 0) return null;
+            int sample = 1;
+            while (Math.max(o.outWidth, o.outHeight) / (sample * 2) >= PointerShape.CUSTOM_MAX_PX) sample *= 2;
+            o = new android.graphics.BitmapFactory.Options();
+            o.inSampleSize = sample;
+            android.graphics.Bitmap b;
+            try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+                b = android.graphics.BitmapFactory.decodeStream(in, null, o);
+            }
+            if (b == null) return null;
+            int longest = Math.max(b.getWidth(), b.getHeight());
+            if (longest > PointerShape.CUSTOM_MAX_PX) {
+                float k = PointerShape.CUSTOM_MAX_PX / (float) longest;
+                b = android.graphics.Bitmap.createScaledBitmap(b, Math.max(1, Math.round(b.getWidth() * k)),
+                        Math.max(1, Math.round(b.getHeight() * k)), true);
+            }
+            java.io.File f = new java.io.File(getFilesDir(), PointerShape.CUSTOM_FILE);
+            java.io.File tmp = new java.io.File(getFilesDir(), PointerShape.CUSTOM_FILE + ".tmp");
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(tmp)) {
+                b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+            }
+            if (!tmp.renameTo(f)) return null;
+            return b;
+        } catch (java.io.IOException | RuntimeException e) {
+            Diag.log("pointer image import failed: " + e);
+            return null;
+        }
+    }
+
+    /** Draws one pointer look, centred. The big preview shows it on a light and a dark half. */
+    private final class LookView extends View {
+        final boolean twoTone;
+        String style = PointerShape.ARROW;
+        final PointerShape shape = new PointerShape(MainActivity.this);
+        final android.graphics.Paint bg = new android.graphics.Paint();
+        final android.graphics.Paint plus = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+        LookView(boolean twoTone) {
+            super(MainActivity.this);
+            this.twoTone = twoTone;
+            plus.setTextAlign(android.graphics.Paint.Align.CENTER);
+            plus.setTextSize(28 * dp);
+            plus.setColor(0x8A808080);
+        }
+
+        void update(int color, float scale, boolean centered) {
+            boolean custom = PointerShape.CUSTOM.equals(style);
+            shape.set(custom && customImage == null ? PointerShape.ARROW : style, color, scale,
+                    custom ? customImage : null, centered);
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas c) {
+            if (PointerShape.CUSTOM.equals(style) && customImage == null) {
+                c.drawText("+", getWidth() / 2f, getHeight() / 2f + 10 * dp, plus);
+                return;
+            }
+            if (!twoTone) {
+                drawCentered(c, getWidth() / 2f, getHeight() / 2f, Math.min(1f, getHeight() / shape.height()));
+                return;
+            }
+            float half = getWidth() / 2f;
+            bg.setColor(0xFFF2F2F2);
+            c.drawRect(0, 0, half, getHeight(), bg);
+            bg.setColor(0xFF303030);
+            c.drawRect(half, 0, getWidth(), getHeight(), bg);
+            float fit = Math.min(1f, getHeight() / shape.height());
+            drawCentered(c, half / 2, getHeight() / 2f, fit);
+            drawCentered(c, half * 1.5f, getHeight() / 2f, fit);
+        }
+
+        private void drawCentered(Canvas c, float cx, float cy, float k) {
+            c.save();
+            c.translate(cx, cy);
+            c.scale(k, k);
+            c.translate(-shape.width() / 2, -shape.height() / 2);
+            shape.draw(c, CursorView.STATE_NORMAL);
+            c.restore();
+        }
+    }
+
+    /** A round colour swatch; the chosen one gets a ring. */
+    private final class Swatch extends View {
+        final int color;
+        private boolean chosen;
+        private final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+        Swatch(int color) {
+            super(MainActivity.this);
+            this.color = color;
+            setClickable(true);
+            setFocusable(true);
+            setContentDescription(String.format(Locale.US, "Colour #%06X", color & 0xFFFFFF));
+        }
+
+        void setChosen(boolean c) {
+            chosen = c;
+            setSelected(c);
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas c) {
+            float cx = getWidth() / 2f, cy = getHeight() / 2f, r = Math.min(cx, cy) - 6 * dp;
+            p.setStyle(android.graphics.Paint.Style.FILL);
+            p.setColor(color);
+            c.drawCircle(cx, cy, r, p);
+            p.setStyle(android.graphics.Paint.Style.STROKE);
+            p.setStrokeWidth(1 * dp);
+            p.setColor(0x61808080);
+            c.drawCircle(cx, cy, r, p);
+            if (chosen) {
+                p.setStrokeWidth(2.5f * dp);
+                p.setColor(themeColor(android.R.attr.colorAccent, 0xFF2196F3));
+                c.drawCircle(cx, cy, r + 4 * dp, p);
+            }
+        }
     }
 
     private void buildControls() {

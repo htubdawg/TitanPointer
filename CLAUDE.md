@@ -346,6 +346,17 @@ User: things were still logged with Capture diagnostics off. The tap test screen
 `Diag` on without setting `Prefs.DIAG`, so the switch said off while capturing (and the log showed). Both now set the
 pref (switch follows; `refresh()` syncs it). Logcat (`Log.w/d`) and the input probe's own log are separate and untouched.
 
+## v1.27: pointer look
+User asked for pointer choices + a custom one; chose shapes **with a colour picker**, and for custom images a simple
+**top-left / centre** click point (not tap-to-set). `PointerShape` draws everything (CursorView and the settings
+previews): Arrow, Hand, Crosshair, Dot, Ring in a 24-unit box (1 unit = 1 dp × size), fill from 8 swatches, outline
+black or white by brightness; hotspot = tip (arrow, hand) or centre. Custom: ACTION_OPEN_DOCUMENT image, shrunk to
+≤256 px, saved as `filesDir/cursor_custom.png`; longest side drawn at 24 dp × size. Prefs `cursor_style`,
+`cursor_color`, `cursor_hotspot`, `cursor_image_ver` (bumped on import so the service reloads). Click/scroll ring:
+behind the tip for tip shapes, small on top for centred ones. CursorView now has hotspotX/hotspotY. Pointer tab order:
+Pointer look (preview on light/dark, tiles, colours, custom box, size, hide when idle), Movement, Direction.
+settings.html draws the shapes with the same geometry (`drawShape`).
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

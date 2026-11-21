@@ -541,7 +541,12 @@ public final class PointerService extends AccessibilityService
                 if (active) link.setGrab(p.getBoolean(Prefs.GRAB, false));
                 break;
             case Prefs.CURSOR_SIZE:
-                cursor.setScale(p.getInt(Prefs.CURSOR_SIZE, 10) / 10f);
+            case Prefs.CURSOR_STYLE:
+            case Prefs.CURSOR_COLOR:
+            case Prefs.CURSOR_HOTSPOT:
+            case Prefs.CURSOR_IMAGE_VER:
+                cursor.loadLook(this, p);
+                lp.x = Integer.MIN_VALUE; // the hotspot may have moved: force a relayout
                 placeCursor();
                 break;
             case Prefs.MODE:
@@ -896,7 +901,7 @@ public final class PointerService extends AccessibilityService
 
     private void createCursor() {
         cursor = new CursorView(this);
-        cursor.setScale(prefs.getInt(Prefs.CURSOR_SIZE, 10) / 10f);
+        cursor.loadLook(this, prefs);
         lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -934,8 +939,8 @@ public final class PointerService extends AccessibilityService
     }
 
     private void placeCursorParams() {
-        lp.x = Math.round(px) - cursor.hotspotPx();
-        lp.y = Math.round(py) - cursor.hotspotPx();
+        lp.x = Math.round(px) - cursor.hotspotX();
+        lp.y = Math.round(py) - cursor.hotspotY();
     }
 
     private void placeCursor() {

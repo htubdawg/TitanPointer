@@ -31,6 +31,13 @@
   .seek .step span { width: 40px; height: 36px; background: #d6d7d7; border-radius: 2px; font-size: 20px; line-height: 36px;
                      text-align: center; color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 1px 1px rgba(0,0,0,.12); }
   .seek .ctl .track { flex: 1; }
+  .tiles { display: flex; gap: 4px; padding-top: 8px; }
+  .tile { flex: 1; text-align: center; font-size: 12px; color: var(--text-secondary); padding: 4px 0; border: 2px solid transparent; border-radius: 6px; }
+  .tile.on { border-color: var(--accent); }
+  .swatches { display: flex; }
+  .swatches span { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; }
+  .swatches i { width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(128,128,128,.38); box-sizing: border-box; }
+  .swatches i.on { box-shadow: 0 0 0 3px #fafafa, 0 0 0 5.5px var(--accent); }
   .content { padding: 8px 16px 32px; }
   .section { font-size: 18px; font-weight: 700; color: var(--text-secondary); padding: 20px 0 6px; }
   .text { font-size: 15px; color: var(--text-secondary); padding: 4px 0; white-space: pre-line; line-height: 1.3; }
@@ -74,7 +81,7 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M2 22h20V2z"/></svg>
     <svg width="9" height="14" viewBox="0 0 10 16" fill="#fff"><rect x="3" y="0" width="4" height="2"/><rect x="0" y="2" width="10" height="14" rx="1"/></svg>
   </span></div>
-  <div class="bar"><div>TitanPointer</div><div class="sub">Version 1.26</div></div>
+  <div class="bar"><div>TitanPointer</div><div class="sub">Version 1.27</div></div>
   <div class="tabs" id="tabs"></div>
   <div class="scroll" id="scroll"><div class="content" id="content"></div></div>
 </div>
@@ -96,6 +103,33 @@
   const keyBinding = (label, desc) => { text(`${label}: ${desc}`); add(`<div class="row">${button('Set')}${button('Clear')}${button('Default')}</div>`); };
   const x = (v) => (v / 10).toFixed(1) + '×';
 
+  // Same geometry as PointerShape.java (24-unit box, 1 unit = 1dp, 3dp margin).
+  function drawShape(ctx, style, color, u) {
+    const m = 3, light = (0.299 * parseInt(color.slice(1, 3), 16) + 0.587 * parseInt(color.slice(3, 5), 16) + 0.114 * parseInt(color.slice(5, 7), 16)) > 140;
+    const parts = [];
+    const rr = (l, t, r, b, rad) => parts.push((c) => { c.beginPath(); c.roundRect(m + l * u, m + t * u, (r - l) * u, (b - t) * u, rad * u); });
+    const circ = (x, y, r) => parts.push((c) => { c.beginPath(); c.arc(m + x * u, m + y * u, r * u, 0, 7); });
+    if (style === 'arrow') {
+      const pts = [[0, 0], [0, 17], [4.2, 13.2], [7, 19.5], [9.6, 18.4], [6.9, 12.2], [12.3, 12.2]];
+      parts.push((c) => { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(m + x * u, m + y * u) : c.moveTo(m + x * u, m + y * u)); c.closePath(); });
+    } else if (style === 'hand') {
+      [[3.5, 0, 6.5, 12, 1.5], [6.5, 7, 9.2, 13, 1.3], [9.2, 8, 11.9, 13, 1.3], [11.9, 9, 14.6, 13.5, 1.3], [2.5, 10.5, 14.6, 21.5, 3], [0, 11.5, 4.5, 16.5, 2]].forEach((p) => rr(...p));
+    } else if (style === 'crosshair') {
+      const t = 1.1; rr(1, 12 - t, 9, 12 + t, 0); rr(15, 12 - t, 23, 12 + t, 0); rr(12 - t, 1, 12 + t, 9, 0); rr(12 - t, 15, 12 + t, 23, 0); circ(12, 12, 1.6);
+    } else if (style === 'dot') {
+      circ(12, 12, 5.5);
+    } else if (style === 'ring') {
+      parts.push((c) => { c.beginPath(); c.arc(m + 12 * u, m + 12 * u, 9 * u, 0, 7); c.arc(m + 12 * u, m + 12 * u, 6.2 * u, 7, 0, true); });
+    }
+    ctx.lineJoin = 'round'; ctx.lineWidth = 1.4; ctx.strokeStyle = light ? '#000' : '#fff'; ctx.fillStyle = color;
+    parts.forEach((p) => { p(ctx); ctx.stroke(); }); // outlines first, fills on top = outline of the union
+    parts.forEach((p) => { p(ctx); ctx.fill('evenodd'); });
+  }
+  function canvas(w, h, fn) {
+    const id = 'c' + Math.random().toString(36).slice(2);
+    add(`<canvas id="${id}" width="${w * 3}" height="${h * 3}" style="width:${w}px;height:${h}px;display:block"></canvas>`);
+    const ctx = document.getElementById(id).getContext('2d'); ctx.scale(3, 3); fn(ctx);
+  }
   const TABS = ['Home', 'Pointer', 'Controls', 'Tools', 'About'];
   const pages = [
     () => {
@@ -110,16 +144,30 @@
       hint('The Titan reports keyboard touches only to the app that has keyboard focus, so while pointer mode is on, TitanPointer holds the focus. Keys can’t reach the app underneath until you turn it off. The Titan’s scroll assistant has to stay on: without it no keyboard touches reach apps at all.');
     },
     () => {
+      section('Pointer look');
+      canvas(448, 72, (c) => {
+        c.fillStyle = '#F2F2F2'; c.fillRect(0, 0, 224, 72); c.fillStyle = '#303030'; c.fillRect(224, 0, 224, 72);
+        for (const cx of [112, 336]) { c.save(); c.translate(cx - 15, 36 - 15); drawShape(c, 'arrow', '#FFFFFF', 1); c.restore(); }
+      });
+      const styles = [['arrow', 'Arrow'], ['hand', 'Hand'], ['crosshair', 'Crosshair'], ['dot', 'Dot'], ['ring', 'Ring'], ['custom', 'Custom']];
+      add(`<div class="tiles">${styles.map(([s, n]) => `<div class="tile ${s === 'arrow' ? 'on' : ''}"><canvas data-s="${s}" width="210" height="144" style="width:70px;height:48px"></canvas><div>${n}</div></div>`).join('')}</div>`);
+      document.querySelectorAll('canvas[data-s]').forEach((cv) => {
+        const c = cv.getContext('2d'); c.scale(3, 3);
+        if (cv.dataset.s === 'custom') { c.fillStyle = 'rgba(128,128,128,.54)'; c.font = '28px Roboto'; c.textAlign = 'center'; c.fillText('+', 35, 34); return; }
+        c.translate(35 - 15, 24 - 15); drawShape(c, cv.dataset.s, '#FFFFFF', 1);
+      });
+      text('Colour');
+      add(`<div class="swatches">${['#FFFFFF', '#000000', '#FFEB3B', '#FF9800', '#F44336', '#E91E63', '#4CAF50', '#2196F3'].map((c, i) => `<span><i class="${i ? '' : 'on'}" style="background:${c}"></i></span>`).join('')}</div>`);
+      seek('Pointer size', 6, 30, 10, x);
+      seek('Hide pointer when idle', 0, 30, 5, (v) => v === 0 ? 'never' : v + ' s');
+      section('Movement');
+      seek('Speed', 1, 20, 7, x);
+      seek('Acceleration', 0, 40, 10, (v) => (v / 10).toFixed(1));
+      seek('Vertical speed', 3, 40, 10, x);
       section('Direction');
       sw('Swap X and Y', false);
       sw('Invert horizontal', false);
       sw('Invert vertical', false);
-      section('Pointer');
-      seek('Speed', 1, 20, 7, x);
-      seek('Acceleration', 0, 40, 10, (v) => (v / 10).toFixed(1));
-      seek('Vertical speed', 3, 40, 10, x);
-      seek('Pointer size', 6, 30, 10, x);
-      seek('Hide pointer when idle', 0, 30, 5, (v) => v === 0 ? 'never' : v + ' s');
     },
     () => {
       section('Clicking');
@@ -164,7 +212,7 @@
     },
     () => {
       section('TitanPointer');
-      text('Version 1.26 (build 27)');
+      text('Version 1.27 (build 28)');
       hint('Turns the original Unihertz Titan’s touch-sensitive keyboard into a touchpad with an on-screen pointer. Nothing is collected or sent anywhere.');
       section('Source code and updates');
       text('https://github.com/htubdawg/TitanPointer');
