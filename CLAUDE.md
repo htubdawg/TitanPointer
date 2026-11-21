@@ -325,6 +325,22 @@ touch doesn't change the switch; `adb shell setprop debug.sf.forcescroll_view no
   "Titan scroll assistant" section (expanded only if the setting is on); the screen polls the permission every 1 s
   while open (granting over ADB didn't refresh it); Diagnostics Copy/Clear now sit above the log.
 
+## v1.25: tabs
+- `MainActivity` is now tabs (user's choice): **Home** (service, pointer mode, scroll assistant status + button to the
+  Titan's setting, gestures/keys cheat sheet built from the current bindings, how it works), **Pointer** (direction,
+  pointer sliders), **Controls** (clicking, scrolling, Titan scroll assistant grant/follow, keys, letters), **Tools**
+  (input probe, collapsible Advanced root/ADB, diagnostics), **About** (version, GitHub, latest release). Plain tappable
+  tabs only: the user said no swiping and no keyboard shortcuts for tabs. Last tab kept in `Prefs.UI_TAB`. The version
+  is also the action bar subtitle.
+- Every slider has − / + buttons (`seekPref(..., step, ...)`; hold repeats). Steps are one slider unit, except
+  "Ignore touches after a key press", which steps 10 ms.
+- Scroll assistant checks: `PointerService.assistFollowPointer(true)` (no-root mode) turns the assistant on if it's
+  off and the WRITE_SECURE_SETTINGS grant is there, otherwise toasts `assist_off_warning`. `ProbeActivity` does the same
+  every 1 s while visible (red banner + button) and turns it back off on stop if it turned it on (unless pointer mode
+  is on). `ScrollAssist.settingsIntent` looks up an exported `*TouchpadActivity` in a package containing
+  "agui"/"led" (package name never confirmed), else opens Settings.
+- `docs/screenshots/settings.html` now has `showTab(i)`; render.js makes settings-1..6.png.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

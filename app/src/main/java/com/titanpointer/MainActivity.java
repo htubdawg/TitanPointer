@@ -6,11 +6,14 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -18,6 +21,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -67,14 +71,83 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         screenW = dm.widthPixels;
         screenH = dm.heightPixels;
 
-        ScrollView sv = new ScrollView(this);
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        if (getActionBar() != null) getActionBar().setSubtitle("Version " + BuildConfig.VERSION_NAME);
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        tabBar = new LinearLayout(this);
+        tabBar.setBackgroundColor(themeColor(android.R.attr.colorPrimary, 0xFF37474F));
+        tabBar.setElevation(4 * dp);
+        outer.addView(tabBar);
+        FrameLayout pagesBox = new FrameLayout(this);
+        outer.addView(pagesBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         int p = (int) (16 * dp);
-        root.setPadding(p, p / 2, p, p * 2);
-        sv.addView(root);
-        setContentView(sv);
+        for (int i = 0; i < TABS.length; i++) {
+            ScrollView sv = new ScrollView(this);
+            LinearLayout page = new LinearLayout(this);
+            page.setOrientation(LinearLayout.VERTICAL);
+            page.setPadding(p, p / 2, p, p * 2);
+            sv.addView(page);
+            pagesBox.addView(sv);
+            pages[i] = sv;
+            pageBodies[i] = page;
+            addTab(i);
+        }
+        setContentView(outer);
         build();
+        showTab(Math.max(0, Math.min(TABS.length - 1, prefs.getInt(Prefs.UI_TAB, 0))));
+    }
+
+    // ---------------------------------------------------------------- tabs
+
+    private static final String[] TABS = {"Home", "Pointer", "Controls", "Tools", "About"};
+    private static final int HOME = 0, POINTER = 1, CONTROLS = 2, TOOLS = 3, ABOUT = 4;
+    private final ScrollView[] pages = new ScrollView[TABS.length];
+    private final LinearLayout[] pageBodies = new LinearLayout[TABS.length];
+    private final TextView[] tabLabels = new TextView[TABS.length];
+    private final View[] tabLines = new View[TABS.length];
+    private LinearLayout tabBar;
+
+    private void addTab(final int i) {
+        LinearLayout tab = new LinearLayout(this);
+        tab.setOrientation(LinearLayout.VERTICAL);
+        tab.setClickable(true);
+        tab.setFocusable(true);
+        TypedValue tv = new TypedValue();
+        if (getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true)) {
+            tab.setBackgroundResource(tv.resourceId);
+        }
+        tab.setOnClickListener(v -> showTab(i));
+        TextView t = new TextView(this);
+        t.setText(TABS[i].toUpperCase(Locale.US));
+        t.setTextSize(14);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(Color.WHITE);
+        t.setGravity(Gravity.CENTER);
+        t.setSingleLine(true);
+        t.setPadding(0, (int) (13 * dp), 0, (int) (10 * dp));
+        tab.addView(t, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        View line = new View(this);
+        line.setBackgroundColor(themeColor(android.R.attr.colorAccent, 0xFF64B5F6));
+        tab.addView(line, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (3 * dp)));
+        tabLabels[i] = t;
+        tabLines[i] = line;
+        tabBar.addView(tab, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+    }
+
+    private void showTab(int i) {
+        for (int k = 0; k < TABS.length; k++) {
+            boolean on = k == i;
+            pages[k].setVisibility(on ? View.VISIBLE : View.GONE);
+            tabLabels[k].setAlpha(on ? 1f : 0.65f);
+            tabLines[k].setVisibility(on ? View.VISIBLE : View.INVISIBLE);
+        }
+        if (prefs.getInt(Prefs.UI_TAB, 0) != i) prefs.edit().putInt(Prefs.UI_TAB, i).apply();
+    }
+
+    private int themeColor(int attr, int fallback) {
+        TypedValue tv = new TypedValue();
+        return getTheme().resolveAttribute(attr, tv, true) && tv.type >= TypedValue.TYPE_FIRST_COLOR_INT
+                && tv.type <= TypedValue.TYPE_LAST_COLOR_INT ? tv.data : fallback;
     }
 
     @Override
@@ -89,12 +162,12 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
     /** The permission is granted from a computer while the app may be open: notice it without a restart. */
     private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
-    private boolean lastGranted;
+    private boolean lastGranted, lastAssistOn;
     private final Runnable grantWatch = new Runnable() {
         @Override
         public void run() {
             boolean g = ScrollAssist.canWrite(MainActivity.this);
-            if (g != lastGranted) refresh();
+            if (g != lastGranted || ScrollAssist.isOn(MainActivity.this) != lastAssistOn) refresh();
             ui.postDelayed(this, 1000);
         }
     };
@@ -111,53 +184,68 @@ public final class MainActivity extends Activity implements PadLink.Listener {
     // ---------------------------------------------------------------- UI
 
     private void build() {
-        // --- Status
-        section("1. Turn on the service");
+        buildHome();
+        buildPointer();
+        buildControls();
+        buildTools();
+        buildAbout();
+    }
+
+    private void buildHome() {
+        root = pageBodies[HOME];
+        section("Turn on the service");
         accessibilityStatus = text("");
         accessibilityButton = button("Open Accessibility settings", v ->
                 startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         enabledSwitch = switchPref(Prefs.ENABLED, "Pointer mode", true);
-        hint("Toggle with Alt + Space (change it under Keys), or the Quick Settings tile “Keyboard pointer”.");
+        toggleHint = hint("");
+        homeAssistStatus = text("");
+        homeAssistButton = button("Open the Titan's scroll assistant setting", v -> {
+            try {
+                startActivity(ScrollAssist.settingsIntent(this));
+            } catch (RuntimeException e) {
+                Toast.makeText(this, "Couldn't open it: look for the scroll assistant in Settings", Toast.LENGTH_LONG).show();
+            }
+        });
 
-        // --- How it works
-        section("2. How it works");
-        helperNote = text("Pointer mode uses the root / ADB helper (see Advanced at the bottom).");
+        section("Gestures and keys");
+        cheatSheet = text("");
+
+        section("How it works");
+        helperNote = text("Pointer mode uses the root / ADB helper (see Tools → Advanced).");
         LinearLayout outer = root;
         noRootBox = new LinearLayout(this);
         noRootBox.setOrientation(LinearLayout.VERTICAL);
         outer.addView(noRootBox);
         root = noRootBox;
         hint("The Titan reports keyboard touches only to the app that has keyboard focus, so while pointer mode "
-                + "is on, TitanPointer holds the focus. Keys can't reach the app underneath until you turn it off.");
-        text("• Slide: move the pointer · Tap: click\n"
-                + "• Enter: click · Alt + Enter: long press (change under Keys)\n"
-                + "• Space: scroll mode on/off\n"
-                + "• Alt + Space: pointer mode on/off");
-        spinnerPref(Prefs.LETTERS, "Letter keys in pointer mode", new String[] {Prefs.LETTERS_NOTHING, Prefs.LETTERS_EXIT},
-                new String[] {"Do nothing", "Turn pointer mode off"}, Prefs.LETTERS_NOTHING);
-        button("Open keyboard input probe", v -> startActivity(new Intent(this, ProbeActivity.class)));
+                + "is on, TitanPointer holds the focus. Keys can't reach the app underneath until you turn it off. "
+                + "The Titan's scroll assistant has to stay on: without it no keyboard touches reach apps at all.");
         root = outer;
+    }
 
-        // --- Orientation
+    private void buildPointer() {
+        root = pageBodies[POINTER];
         section("Direction");
         switchPref(Prefs.SWAP, "Swap X and Y", false);
         switchPref(Prefs.INV_X, "Invert horizontal", false);
         switchPref(Prefs.INV_Y, "Invert vertical", false);
 
-        // --- Pointer
         section("Pointer");
-        seekPref(Prefs.SENS, "Speed", Prefs.SENS_MIN, Prefs.SENS_MAX, Prefs.SENS_DEFAULT, v -> String.format(Locale.US, "%.1f×", v / 10f));
-        seekPref(Prefs.ACCEL, "Acceleration", 0, 40, 10, v -> String.format(Locale.US, "%.1f", v / 10f));
-        seekPref(Prefs.YSPEED, "Vertical speed", 3, 40, 10, v -> String.format(Locale.US, "%.1f×", v / 10f));
-        seekPref(Prefs.CURSOR_SIZE, "Pointer size", 6, 30, 10, v -> String.format(Locale.US, "%.1f×", v / 10f));
-        seekPref(Prefs.AUTOHIDE_S, "Hide pointer when idle", 0, 30, 5, v -> v == 0 ? "never" : v + " s");
+        seekPref(Prefs.SENS, "Speed", Prefs.SENS_MIN, Prefs.SENS_MAX, Prefs.SENS_DEFAULT, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
+        seekPref(Prefs.ACCEL, "Acceleration", 0, 40, 10, 1, v -> String.format(Locale.US, "%.1f", v / 10f));
+        seekPref(Prefs.YSPEED, "Vertical speed", 3, 40, 10, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
+        seekPref(Prefs.CURSOR_SIZE, "Pointer size", 6, 30, 10, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
+        seekPref(Prefs.AUTOHIDE_S, "Hide pointer when idle", 0, 30, 5, 1, v -> v == 0 ? "never" : v + " s");
+    }
 
-        // --- Clicking
+    private void buildControls() {
+        root = pageBodies[CONTROLS];
         section("Clicking");
         switchPref(Prefs.TAP, "Tap to click", true);
         switchPref(Prefs.TAP_DRAG, "Tap, then touch and move to drag (adds a short click delay)", true);
-        seekPref(Prefs.TYPING_MS, "Ignore touches after a key press", 0, 1000, 350, v -> v + " ms");
-        seekPref(Prefs.IGNORE_TOP, "Ignore touches that start in the top key row", 0, 40, Prefs.DEFAULT_IGNORE_TOP,
+        seekPref(Prefs.TYPING_MS, "Ignore touches after a key press", 0, 1000, 350, 10, v -> v + " ms");
+        seekPref(Prefs.IGNORE_TOP, "Ignore touches that start in the top key row", 0, 40, Prefs.DEFAULT_IGNORE_TOP, 1,
                 v -> v == 0 ? "off" : v + "% of the keyboard");
         hint("The top row (Shift, Recents, the home key, Back, Alt) is part of the touch surface. Touches that "
                 + "start there don't move the pointer or click; a slide that starts lower can still run into it.");
@@ -166,35 +254,14 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 + "until a key is pressed. While it does, a tap on the keyboard clicks the button under the pointer "
                 + "through accessibility instead. Web pages and newer app screens still get a normal tap.");
 
-        // --- Scrolling
-        section("Scrolling (Space turns scroll mode on/off)");
-        hint("In scroll mode, slides scroll and taps never click.");
-        seekPref(Prefs.SCROLL, "Scroll speed", 2, 60, 15, v -> String.format(Locale.US, "%.1f×", v / 10f));
+        section("Scrolling");
+        scrollHint = hint("");
+        seekPref(Prefs.SCROLL, "Scroll speed", 2, 60, 15, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
         switchPref(Prefs.INV_SCROLL, "Reverse scroll direction", false);
         switchPref(Prefs.FLING, "Fling: a quick flick keeps scrolling", true);
         hint("Flick and lift while still moving to keep scrolling; stop before lifting to stop dead.");
 
-        // --- Keys
-        section("Keys");
-        keyBinding("Pointer mode on/off", Prefs.TOGGLE_KEY, Prefs.DEFAULT_TOGGLE_KEY, Prefs.TOGGLE_META, Prefs.DEFAULT_TOGGLE_META);
-        hint("Works everywhere. The key is swallowed while it toggles pointer mode, so pick a combination "
-                + "you don't type with.");
-        keyBinding("Click", Prefs.CLICK_KEY, Prefs.DEFAULT_CLICK_KEY, Prefs.CLICK_META, Prefs.DEFAULT_CLICK_META);
-        keyBinding("Long press", Prefs.LONG_KEY, Prefs.DEFAULT_LONG_KEY, Prefs.LONG_META, Prefs.DEFAULT_LONG_META);
-        hint("Click and long press act at the pointer while pointer mode is on.");
-
-        // --- Gestures
-        section("Gestures");
-        text("• Slide: move the pointer\n"
-                + "• Tap: click (tap)\n"
-                + "• Tap twice: double tap\n"
-                + "• Tap, then touch again and move: drag\n"
-                + "• Space, then slide: scroll\n"
-                + "• Typing is ignored automatically");
-
-        // --- The Titan's scroll assistant (collapsed unless its setting is on)
-        final LinearLayout assistOuter = root;
-        root = collapsible("Titan scroll assistant", prefs.getBoolean(Prefs.ASSIST_FOLLOWS_POINTER, false));
+        section("Titan scroll assistant");
         assistStatus = text("");
         LinearLayout grant = new LinearLayout(this);
         grant.setOrientation(LinearLayout.VERTICAL);
@@ -213,19 +280,32 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         grant.addView(gc);
         Button gcopy = new Button(this);
         gcopy.setText("Copy command");
-        gcopy.setOnClickListener(v -> {
-            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("adb", ScrollAssist.GRANT_COMMAND));
-            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
-        });
+        gcopy.setOnClickListener(v -> copy("adb", ScrollAssist.GRANT_COMMAND));
         grant.addView(gcopy);
         followSwitch = switchPref(Prefs.ASSIST_FOLLOWS_POINTER, "Turn the scroll assistant off when pointer mode is off", false);
         hint("The keyboard stops scrolling pages while pointer mode is off. Turning pointer mode on turns it back "
                 + "on, since the pointer needs it. If you turn the TitanPointer service off, the scroll assistant "
                 + "stays as it was.");
-        root = assistOuter;
 
-        // --- Advanced: root / ADB
+        section("Keys");
+        keyBinding("Pointer mode on/off", Prefs.TOGGLE_KEY, Prefs.DEFAULT_TOGGLE_KEY, Prefs.TOGGLE_META, Prefs.DEFAULT_TOGGLE_META);
+        hint("Works everywhere. The key is swallowed while it toggles pointer mode, so pick a combination "
+                + "you don't type with.");
+        keyBinding("Click", Prefs.CLICK_KEY, Prefs.DEFAULT_CLICK_KEY, Prefs.CLICK_META, Prefs.DEFAULT_CLICK_META);
+        keyBinding("Long press", Prefs.LONG_KEY, Prefs.DEFAULT_LONG_KEY, Prefs.LONG_META, Prefs.DEFAULT_LONG_META);
+        hint("Click and long press act at the pointer while pointer mode is on.");
+        spinnerPref(Prefs.LETTERS, "Letter keys in pointer mode", new String[] {Prefs.LETTERS_NOTHING, Prefs.LETTERS_EXIT},
+                new String[] {"Do nothing", "Turn pointer mode off"}, Prefs.LETTERS_NOTHING);
+    }
+
+    private void buildTools() {
+        root = pageBodies[TOOLS];
+        section("Keyboard input probe");
+        hint("Shows everything the keyboard and screen send to an ordinary app. Useful to check that keyboard "
+                + "touches arrive at all.");
+        button("Open keyboard input probe", v -> startActivity(new Intent(this, ProbeActivity.class)));
+
+        // --- Advanced: root / ADB (collapsed unless a helper mode is on)
         boolean helperMode = !Prefs.MODE_NOROOT.equals(prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT));
         final LinearLayout advOuter = root;
         root = collapsible("Advanced: root / ADB (untested)", helperMode);
@@ -275,17 +355,12 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         box.addView(adbCommand);
         Button copy = new Button(this);
         copy.setText("Copy command");
-        copy.setOnClickListener(v -> {
-            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("adb", adbCommand.getText()));
-            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
-        });
+        copy.setOnClickListener(v -> copy("adb", adbCommand.getText()));
         box.addView(copy);
 
         linkStatus = text("");
         linkStatus.setTypeface(Typeface.DEFAULT_BOLD);
 
-        // --- Device
         section("Pick the keyboard touch device");
         deviceText = text("");
         button("Find devices", v -> {
@@ -296,7 +371,6 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         hint("Stops Android and the Titan's own keyboard scrolling from also reacting to your swipes. "
                 + "Don't use it if the chosen device is also the screen or the keys (the app warns you).");
 
-        // --- Test
         section("Test & calibrate");
         hint("Touch the keyboard: dots should follow your fingers. If the device reports more than the keyboard "
                 + "(for example it is the main touchscreen), calibrate to limit it to the keyboard area.");
@@ -319,12 +393,10 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         row.addView(calibrateButton);
         root.addView(row);
         zoneSwitch = switchPref(Prefs.ZONE_ON, "Only use the calibrated area", false);
-
         root = advOuter;
 
-        // --- Diagnostics (collapsed unless capturing is on)
-        final LinearLayout diagOuter = root;
-        root = collapsible("Diagnostics", prefs.getBoolean(Prefs.DIAG, false));
+        // --- Diagnostics
+        section("Diagnostics");
         hint("What the pointer saw recently: focus changes, which windows opened, keys and where they came from. "
                 + "If the pointer stops working somewhere, reproduce it, come back here and copy this.");
         Switch diagSwitch = switchPref(Prefs.DIAG, "Capture diagnostics", false);
@@ -333,6 +405,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
             Diag.setEnabled(on);
             refresh();
         });
+        button("Open tap test screen", v -> startActivity(new Intent(this, TapTestActivity.class)));
         button("Search phone software for the scroll switch", v -> {
             Diag.setEnabled(true);
             v.setEnabled(false);
@@ -345,19 +418,14 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 }
             })), "framework-scan").start();
         });
-        button("Open tap test screen", v -> startActivity(new Intent(this, TapTestActivity.class)));
         switchPref(Prefs.TAP_DELAY_TEST, "Test: taps on the keyboard click 1 s late", false);
         switchPref(Prefs.KEY_TIMER_TEST, "Test: send the click key's click from a timer", false);
         hint("For tracking down clicks that don't work. Leave off normally.");
         LinearLayout dr = new LinearLayout(this);
         Button copyDiag = new Button(this);
         copyDiag.setText("Copy");
-        copyDiag.setOnClickListener(v -> {
-            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("TitanPointer diagnostics",
-                    "TitanPointer " + BuildConfig.VERSION_NAME + "\n" + Diag.dump()));
-            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
-        });
+        copyDiag.setOnClickListener(v -> copy("TitanPointer diagnostics",
+                "TitanPointer " + BuildConfig.VERSION_NAME + "\n" + Diag.dump()));
         Button clearDiag = new Button(this);
         clearDiag.setText("Clear");
         clearDiag.setOnClickListener(v -> {
@@ -372,7 +440,65 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         diagText.setTypeface(Typeface.MONOSPACE);
         diagText.setTextSize(11);
         diagText.setTextIsSelectable(true);
-        root = diagOuter;
+    }
+
+    private static final String REPO_URL = "https://github.com/htubdawg/TitanPointer";
+
+    private void buildAbout() {
+        root = pageBodies[ABOUT];
+        section("TitanPointer");
+        text("Version " + BuildConfig.VERSION_NAME + " (build " + BuildConfig.VERSION_CODE + ")");
+        hint("Turns the original Unihertz Titan's touch-sensitive keyboard into a touchpad with an on-screen "
+                + "pointer. Nothing is collected or sent anywhere.");
+
+        section("Source code and updates");
+        TextView url = text(REPO_URL);
+        url.setTextIsSelectable(true);
+        button("Open on GitHub", v -> openUrl(REPO_URL));
+        button("Download the latest release", v -> openUrl(REPO_URL + "/releases/latest"));
+        hint("Updates install over the old version: download the APK from the latest release and open it.");
+    }
+
+    private void openUrl(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (RuntimeException e) {
+            copy("link", url);
+            Toast.makeText(this, "No browser found: link copied", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void copy(String label, CharSequence text) {
+        ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(ClipData.newPlainText(label, text));
+        Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+    }
+
+    private TextView toggleHint, homeAssistStatus, cheatSheet, scrollHint;
+    private Button homeAssistButton;
+
+    /** Text that names the current key bindings. */
+    private void updateKeyTexts() {
+        String toggle = keyName(Prefs.TOGGLE_KEY, Prefs.DEFAULT_TOGGLE_KEY, Prefs.TOGGLE_META, Prefs.DEFAULT_TOGGLE_META);
+        String click = keyName(Prefs.CLICK_KEY, Prefs.DEFAULT_CLICK_KEY, Prefs.CLICK_META, Prefs.DEFAULT_CLICK_META);
+        String lng = keyName(Prefs.LONG_KEY, Prefs.DEFAULT_LONG_KEY, Prefs.LONG_META, Prefs.DEFAULT_LONG_META);
+        toggleHint.setText("Toggle with " + toggle + " or the Quick Settings tile “Keyboard pointer”. "
+                + "Keys are set under Controls.");
+        StringBuilder sb = new StringBuilder();
+        sb.append("• Slide: move the pointer\n");
+        sb.append("• Tap: click · tap twice: double tap\n");
+        sb.append("• Tap, then touch again and move: drag\n");
+        if (!"none".equals(click)) sb.append("• ").append(click).append(": click\n");
+        if (!"none".equals(lng)) sb.append("• ").append(lng).append(": long press\n");
+        sb.append("• Space: scroll mode on/off (slides scroll, taps don't click)\n");
+        if (!"none".equals(toggle)) sb.append("• ").append(toggle).append(": pointer mode on/off\n");
+        sb.append("• Typing is ignored automatically");
+        cheatSheet.setText(sb);
+        scrollHint.setText("Space turns scroll mode on and off. In scroll mode, slides scroll and taps never click.");
+    }
+
+    private String keyName(String keyPref, int defKey, String metaPref, int defMeta) {
+        return describeKey(prefs.getInt(keyPref, defKey), prefs.getInt(metaPref, defMeta));
     }
 
     /**
@@ -510,6 +636,13 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 : "✗ TitanPointer isn't allowed to switch the scroll assistant yet.");
         assistGrantBox.setVisibility(granted ? View.GONE : View.VISIBLE);
         followSwitch.setEnabled(granted);
+        boolean assistOn = ScrollAssist.isOn(this);
+        lastAssistOn = assistOn;
+        homeAssistStatus.setText(assistOn ? "✓ Titan scroll assistant is on"
+                : "✗ The Titan's scroll assistant is off, so no keyboard touches reach the pointer."
+                + (granted ? " Turning pointer mode on switches it on." : " Turn it on:"));
+        homeAssistButton.setVisibility(assistOn || granted ? View.GONE : View.VISIBLE);
+        updateKeyTexts();
 
         for (Runnable r : keyLabels) r.run();
         if (diagText != null) {
@@ -631,10 +764,11 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         return t;
     }
 
-    private void hint(String s) {
+    private TextView hint(String s) {
         TextView t = text(s);
         t.setTextSize(13);
         t.setAlpha(0.7f);
+        return t;
     }
 
     private Button button(String label, View.OnClickListener l) {
@@ -664,12 +798,19 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         String f(int v);
     }
 
-    private void seekPref(final String key, final String label, final int min, int max, int def, final Fmt fmt) {
+    /**
+     * A labelled slider with − and + buttons either side. Each button tap moves one {@code step}; holding a
+     * button repeats, faster after a moment.
+     */
+    private void seekPref(final String key, final String label, final int min, final int max, int def, final int step,
+            final Fmt fmt) {
         final TextView t = new TextView(this);
         t.setTextSize(15);
         t.setPadding(0, (int) (8 * dp), 0, 0);
         root.addView(t);
-        SeekBar sb = new SeekBar(this);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        final SeekBar sb = new SeekBar(this);
         sb.setMax(max - min);
         int cur = Math.max(min, Math.min(max, prefs.getInt(key, def)));
         sb.setProgress(cur - min);
@@ -678,7 +819,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
             @Override
             public void onProgressChanged(SeekBar s, int p, boolean user) {
                 t.setText(label + ": " + fmt.f(p + min));
-                if (user) prefs.edit().putInt(key, p + min).apply();
+                if (prefs.getInt(key, Integer.MIN_VALUE) != p + min) prefs.edit().putInt(key, p + min).apply();
             }
 
             @Override
@@ -687,7 +828,53 @@ public final class MainActivity extends Activity implements PadLink.Listener {
             @Override
             public void onStopTrackingTouch(SeekBar s) {}
         });
-        root.addView(sb);
+        // Setting the progress from code also saves (onProgressChanged), so the buttons only move the slider.
+        row.addView(stepButton("−", "Decrease " + label, () -> {
+            int v = sb.getProgress() + min;
+            int down = (v % step == 0 ? v - step : v - Math.floorMod(v, step));
+            sb.setProgress(Math.max(min, down) - min);
+        }));
+        row.addView(sb, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(stepButton("+", "Increase " + label, () -> {
+            int v = sb.getProgress() + min;
+            int up = v - Math.floorMod(v, step) + step;
+            sb.setProgress(Math.min(max, up) - min);
+        }));
+        root.addView(row);
+    }
+
+    /** A small square button that runs {@code action} once per tap and repeatedly while held. */
+    private Button stepButton(String label, String description, final Runnable action) {
+        final Button b = new Button(this);
+        b.setText(label);
+        b.setTextSize(20);
+        b.setContentDescription(description);
+        b.setMinWidth(0);
+        b.setMinimumWidth(0);
+        b.setPadding(0, 0, 0, 0);
+        int size = (int) (48 * dp);
+        b.setLayoutParams(new LinearLayout.LayoutParams(size, size));
+        b.setOnClickListener(v -> action.run());
+        final Runnable repeat = new Runnable() {
+            int count;
+
+            @Override
+            public void run() {
+                if (!b.isPressed()) {
+                    count = 0;
+                    return;
+                }
+                action.run();
+                count++;
+                ui.postDelayed(this, count < 10 ? 120 : 40);
+            }
+        };
+        b.setOnLongClickListener(v -> {
+            ui.removeCallbacks(repeat);
+            repeat.run();
+            return true; // no click on release
+        });
+        return b;
     }
 
     private void spinnerPref(final String key, String label, final String[] values, String[] labels, String def) {

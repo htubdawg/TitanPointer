@@ -535,6 +535,7 @@ public final class PointerService extends AccessibilityService
                 break;
             case Prefs.ASSIST_OFF_FOR_CLICK:
             case Prefs.ELEMENT_CLICK:
+            case Prefs.UI_TAB:
                 break;
             case Prefs.GRAB:
                 if (active) link.setGrab(p.getBoolean(Prefs.GRAB, false));
@@ -789,6 +790,16 @@ public final class PointerService extends AccessibilityService
 
     /** "Scroll assistant off when pointer mode is off": follow pointer mode. */
     private void assistFollowPointer(boolean pointerOn) {
+        if (pointerOn && !ScrollAssist.isOn(this) && isNoRoot(prefs)) {
+            // Without the assistant the keyboard touches never reach the focus window: turn it on, or say so.
+            if (ScrollAssist.set(this, true)) {
+                Diag.log("scroll assistant was off: turned on for pointer mode");
+            } else {
+                Diag.log("scroll assistant is off and can't be switched: pointer gets no keyboard touches");
+                Toast.makeText(this, R.string.assist_off_warning, Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         if (!prefs.getBoolean(Prefs.ASSIST_FOLLOWS_POINTER, false) || !ScrollAssist.canWrite(this)) return;
         if (ScrollAssist.isOn(this) == pointerOn) return;
         boolean ok = ScrollAssist.set(this, pointerOn);

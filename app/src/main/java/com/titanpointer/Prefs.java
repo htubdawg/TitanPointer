@@ -60,6 +60,8 @@ public final class Prefs {
     public static final String ASSIST_OFF_FOR_CLICK = "assist_off_for_click";
     /** Capture the in-memory diagnostics log (off by default). */
     public static final String DIAG = "diag";
+    /** The settings screen's last open tab (UI only). */
+    public static final String UI_TAB = "ui_tab";
     public static final String ADB_PORT = "adb_port", ADB_TOKEN = "adb_token";
 
     private Prefs() {}

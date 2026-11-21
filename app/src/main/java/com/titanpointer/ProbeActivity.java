@@ -79,6 +79,29 @@ public final class ProbeActivity extends Activity {
         bar.addView(copy);
         root.addView(bar);
 
+        assistBanner = new LinearLayout(this);
+        assistBanner.setOrientation(LinearLayout.VERTICAL);
+        assistBanner.setBackgroundColor(0xFFC62828);
+        assistBanner.setPadding(p, p, p, p);
+        TextView warn = new TextView(this);
+        warn.setTextColor(Color.WHITE);
+        warn.setTextSize(15);
+        warn.setText("The Titan's scroll assistant is off. Keyboard touches don't reach this screen (or the pointer) "
+                + "until it's on.");
+        assistBanner.addView(warn);
+        Button openAssist = new Button(this);
+        openAssist.setText("Open the Titan's scroll assistant setting");
+        openAssist.setOnClickListener(v -> {
+            try {
+                startActivity(ScrollAssist.settingsIntent(this));
+            } catch (RuntimeException e) {
+                Toast.makeText(this, "Couldn't open it: look for the scroll assistant in Settings", Toast.LENGTH_LONG).show();
+            }
+        });
+        assistBanner.addView(openAssist);
+        assistBanner.setVisibility(View.GONE);
+        root.addView(assistBanner);
+
         status = new TextView(this);
         status.setTextSize(13);
         status.setText("Slide on the keyboard without pressing keys. Then turn on pointer capture and try again.");
@@ -109,6 +132,46 @@ public final class ProbeActivity extends Activity {
     protected void onResume() {
         super.onResume();
         pad.requestFocus();
+    }
+
+    // ---- The Titan's scroll assistant: keyboard touches only reach apps while it's on ----
+
+    private LinearLayout assistBanner;
+    /** True while the probe has the assistant on that was off when it opened. */
+    private boolean assistTurnedOn;
+
+    private final Runnable assistWatch = new Runnable() {
+        @Override
+        public void run() {
+            boolean on = ScrollAssist.isOn(ProbeActivity.this);
+            if (!on && ScrollAssist.set(ProbeActivity.this, true)) {
+                on = true;
+                assistTurnedOn = true;
+                add("--- scroll assistant was off: turned on while the probe is open ---");
+            }
+            if (on != (assistBanner.getVisibility() == View.GONE)) {
+                assistBanner.setVisibility(on ? View.GONE : View.VISIBLE);
+                add("--- scroll assistant " + (on ? "on" : "OFF (keyboard touches won't arrive)") + " ---");
+            }
+            main.postDelayed(this, 1000);
+        }
+    };
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        assistWatch.run();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        main.removeCallbacks(assistWatch);
+        if (assistTurnedOn) { // put it back as it was, unless pointer mode came on meanwhile (it needs it)
+            assistTurnedOn = false;
+            boolean pointerOn = PointerService.isRunning() && Prefs.get(this).getBoolean(Prefs.ENABLED, true);
+            if (!pointerOn) ScrollAssist.set(this, false);
+        }
     }
 
     // ---- Every input path an ordinary app can see ----
@@ -227,6 +290,7 @@ public final class ProbeActivity extends Activity {
     private void copyResults() {
         StringBuilder sb = new StringBuilder("TitanPointer input probe\n");
         sb.append("Android ").append(Build.VERSION.RELEASE).append(" / ").append(Build.MODEL).append('\n');
+        sb.append("Scroll assistant: ").append(ScrollAssist.isOn(this) ? "on" : "OFF").append('\n');
         sb.append("Paths: ").append(pathCounts).append('\n');
         sb.append("Sources: ").append(sourcesSeen).append('\n');
         sb.append("Axes: ").append(axesSeen).append('\n');

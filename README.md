@@ -9,13 +9,16 @@ touchpad with an on-screen mouse pointer. No root needed.
 > directed and tested by a human on a real Titan. Review it before you trust it with anything important.
 
 <p>
-  <img src="docs/images/settings-1.png" width="24%" alt="Settings: service status, pointer mode switch, how it works">
-  <img src="docs/images/settings-2.png" width="24%" alt="Settings: pointer speed, acceleration, size">
-  <img src="docs/images/settings-3.png" width="24%" alt="Settings: clicking, including clicking standard buttons directly">
-  <img src="docs/images/settings-4.png" width="24%" alt="Settings: click, long-press and toggle keys">
+  <img src="docs/images/settings-1.png" width="32%" alt="Home tab: service status, pointer mode switch, scroll assistant status, gestures and keys">
+  <img src="docs/images/settings-2.png" width="32%" alt="Pointer tab: direction, speed, acceleration, size, with − and + buttons on every slider">
+  <img src="docs/images/settings-3.png" width="32%" alt="Controls tab: clicking, including clicking standard buttons directly">
+  <img src="docs/images/settings-4.png" width="32%" alt="Controls tab: click, long-press and toggle keys">
+  <img src="docs/images/settings-5.png" width="32%" alt="Tools tab: keyboard input probe, advanced root/ADB, diagnostics">
+  <img src="docs/images/settings-6.png" width="32%" alt="About tab: version and GitHub links">
 </p>
 
-<sub>The settings screen (1.24) at the Titan's 1440 × 1440 resolution, with default settings. These are renderings of
+<sub>The settings screen (1.25) at the Titan's 1440 × 1440 resolution, with default settings: tabs Home, Pointer,
+Controls, Tools and About. Every slider has − and + buttons for fine steps (hold to repeat). These are renderings of
 the app's layout (<code>docs/screenshots/</code>, made with <code>node docs/screenshots/render.js</code>), not
 captures from a phone.</sub>
 
@@ -45,6 +48,9 @@ captures from a phone.</sub>
 - Touches during and just after a key press don't move the pointer or click.
 - Pointer mode can also be switched with the Quick Settings tile **Keyboard pointer** or the switch in
   the app.
+- The Titan's scroll assistant must be on for the pointer to see keyboard touches. The Home tab shows whether
+  it is; turning pointer mode on (or opening the keyboard input probe) switches it on if TitanPointer has the
+  permission below, and warns you otherwise.
 
 Hardware details (keyboard layout, sensor range, key codes): [docs/titan-hardware.md](docs/titan-hardware.md).
 
@@ -52,7 +58,7 @@ Hardware details (keyboard layout, sensor range, key codes): [docs/titan-hardwar
 
 On the Titan, a fake tap right after a keyboard touch doesn't click classic Android buttons and toolbars,
 including the address bars and toolbar buttons of Firefox and Chrome. Since 1.24, **Click standard buttons
-directly** (under Clicking, on by default) works around it: while the phone is blocking taps, a tap on the
+directly** (Controls tab → Clicking, on by default) works around it: while the phone is blocking taps, a tap on the
 keyboard clicks the standard button under the pointer through accessibility (for text fields: focus and
 click) instead of sending a fake touch. Web pages and Jetpack Compose screens accept fake taps, so they
 still get a normal tap. The click key (Enter) also works everywhere. Not yet confirmed on the phone.
@@ -69,7 +75,7 @@ refused by standard views. Only root or `adb shell setprop` can reset the proper
 
 ## Titan scroll assistant setting (optional, needs a one-time ADB command)
 
-The collapsed **Titan scroll assistant** section has **Turn the scroll assistant off when pointer mode is off**
+The **Titan scroll assistant** section (Controls tab) has **Turn the scroll assistant off when pointer mode is off**
 (off by default): the keyboard then only scrolls pages while you're using the pointer, and pointer mode turns
 it back on (the pointer needs it). To allow it, run this once from a computer after installing:
 
@@ -83,7 +89,7 @@ The scroll assistant is Settings.Global `touchpad_switch_value` (1 on, 0 off); t
 ## Install
 
 1. Install the APK from the [latest release](https://github.com/htubdawg/titanpointer/releases/latest)
-   (or [`dist/TitanPointer-1.24.apk`](dist/TitanPointer-1.24.apk) in this repository).
+   (or [`dist/TitanPointer-1.25.apk`](dist/TitanPointer-1.25.apk) in this repository).
 2. Open **TitanPointer** and turn on its accessibility service (Settings → Accessibility → TitanPointer).
    It draws the pointer, sends taps and swipes at the pointer, and reads key presses for the shortcuts.
    Nothing is collected or sent anywhere.
@@ -92,6 +98,8 @@ The scroll assistant is Settings.Global `touchpad_switch_value` (1 on, 0 off); t
 4. Press **Alt + Space** and slide on the keyboard.
 5. Optional: to have the keyboard stop scrolling pages while pointer mode is off, run the `pm grant`
    command [above](#titan-scroll-assistant-setting-optional-needs-a-one-time-adb-command) once.
+
+The app's version and a link to this repository are on the **About** tab.
 
 The app shows a minimal, silent notification while the service runs. It keeps Android from stopping the
 service when you swipe the app away; you can hide it in the notification settings.
@@ -108,8 +116,7 @@ turn it off (Alt + Space) to type. While pointer mode is on, the keyboard app (e
 is hidden and the text field loses focus, because otherwise the keyboard app receives the keyboard touches
 instead. Both are restored when you turn pointer mode off.
 
-If the pointer stops working somewhere, open the **Diagnostics** section at the bottom of the app
-(collapsed, and off by default), turn on **Capture diagnostics**, reproduce the problem and copy the log. It
+If the pointer stops working somewhere, open the **Tools** tab, turn on **Capture diagnostics**, reproduce the problem and copy the log. It
 records focus changes, windows, keys and every click: where it went, what was under the pointer and what
 the app did with it. The section also has a tap test screen and a search of the phone's own software that
 were used to track down the limitation above.
@@ -121,7 +128,7 @@ were used to track down the limitation above.
 
 A small native helper ([`native/titanpad.c`](native/titanpad.c)) reads the sensor's `/dev/input/eventN`
 device directly, so keys keep working while the pointer is on. Choose it in the collapsed **Advanced: root /
-ADB (untested)** section at the bottom of the app. It needs either:
+ADB (untested)** section on the Tools tab. It needs either:
 
 - **Root (Magisk):** choose *Root* in the app and approve the su prompt.
 - **ADB:** choose *ADB helper*, enable USB debugging, and after every reboot run the command shown in the

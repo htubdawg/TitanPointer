@@ -7,15 +7,17 @@ const path = require('path');
   const page = await browser.newPage({ viewport: { width: 480, height: 480 }, deviceScaleFactor: 3 });
   await page.goto('file://' + path.join(__dirname, 'settings.html'));
   await page.evaluate(() => document.fonts.ready);
-  // Each shot scrolls the settings list so that this section heading is near the top.
-  const shots = [['settings-1.png', null], ['settings-2.png', 'Pointer'], ['settings-3.png', 'Clicking'], ['settings-4.png', 'Keys']];
-  for (const [file, heading] of shots) {
-    await page.evaluate((h) => {
+  // Each shot opens a tab and, optionally, scrolls so that a section heading is near the top.
+  const shots = [['settings-1.png', 0, null], ['settings-2.png', 1, null], ['settings-3.png', 2, null], ['settings-4.png', 2, 'Keys'],
+                 ['settings-5.png', 3, null], ['settings-6.png', 4, null]];
+  for (const [file, tab, heading] of shots) {
+    await page.evaluate(([t, h]) => {
+      showTab(t);
+      if (!h) return;
       const s = document.getElementById('scroll');
-      if (!h) { s.scrollTop = 0; return; }
       const el = [...document.querySelectorAll('.section')].find((e) => e.textContent === h);
       s.scrollTop = el.offsetTop - s.offsetTop - 8;
-    }, heading);
+    }, [tab, heading]);
     await page.screenshot({ path: path.join(__dirname, '..', 'images', file) });
   }
   await browser.close();

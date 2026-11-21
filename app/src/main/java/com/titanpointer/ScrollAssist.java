@@ -1,6 +1,9 @@
 package com.titanpointer;
 
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.provider.Settings;
 
@@ -37,6 +40,30 @@ final class ScrollAssist {
             Diag.log("writing " + SETTING + " failed: " + e);
             return false;
         }
+    }
+
+    /**
+     * Intent for the Titan's own scroll assistant screen (TouchpadActivity in the Agui settings app, found on
+     * the user's phone by the 1.21 scan; package name unknown, so it is looked up), else the Settings app.
+     */
+    static Intent settingsIntent(Context c) {
+        PackageManager pm = c.getPackageManager();
+        try {
+            for (PackageInfo p : pm.getInstalledPackages(0)) {
+                String n = p.packageName.toLowerCase(java.util.Locale.US);
+                if (!n.contains("agui") && !n.contains("led")) continue;
+                PackageInfo full = pm.getPackageInfo(p.packageName, PackageManager.GET_ACTIVITIES);
+                if (full.activities == null) continue;
+                for (ActivityInfo a : full.activities) {
+                    if (a.name.endsWith("TouchpadActivity") && a.exported && a.enabled) {
+                        return new Intent().setClassName(a.packageName, a.name);
+                    }
+                }
+            }
+        } catch (RuntimeException | PackageManager.NameNotFoundException e) {
+            Diag.log("looking for the scroll assistant screen failed: " + e);
+        }
+        return new Intent(Settings.ACTION_SETTINGS);
     }
 
     /** The property the input system reads, for the log. */
