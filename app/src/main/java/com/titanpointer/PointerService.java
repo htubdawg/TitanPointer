@@ -484,7 +484,7 @@ public final class PointerService extends AccessibilityService
                     engine.setScrollLock(on);
                     if (!on && scrollHeld) liftScroll.run();
                     main.removeCallbacks(liftScroll);
-                    cursor.setState(on ? CursorView.STATE_SCROLL : CursorView.STATE_NORMAL);
+                    if (!dragging) cursor.setState(on ? CursorView.STATE_SCROLL : CursorView.STATE_NORMAL);
                     setCursorVisible(true);
                 }
                 return true;
@@ -817,6 +817,28 @@ public final class PointerService extends AccessibilityService
         if (!active) return;
         setCursorVisible(true);
         flash();
+        injector.longPress(px, py);
+    }
+
+    /** Long press from the touchpad (joystick mode's right zone). */
+    @Override
+    public void onLongClick() {
+        if (!active) return;
+        setCursorVisible(true);
+        flash();
+        if (prefs.getBoolean(Prefs.ELEMENT_CLICK, true) && "yes".equals(titanScrollProp())) {
+            // Same Titan block as for clicks: a standard View refuses the injected long press, so long-click it.
+            android.view.accessibility.AccessibilityNodeInfo n =
+                    ElementClick.find(this, Math.round(px), Math.round(py), true);
+            if (n != null) {
+                boolean ok = ElementClick.longClick(n);
+                Diag.log("element long press (right zone): " + ElementClick.describe(n) + (ok ? "" : " REFUSED, pressing"));
+                if (ok) return;
+            } else if (Diag.isEnabled()) {
+                Diag.log("element long press: nothing standard at the pointer, pressing");
+            }
+        }
+        Diag.log("long press (right zone)");
         injector.longPress(px, py);
     }
 

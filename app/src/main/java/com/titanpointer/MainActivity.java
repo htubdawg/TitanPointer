@@ -6,6 +6,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -374,6 +375,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
     private final SharedPreferences.OnSharedPreferenceChangeListener lookListener = (p, key) -> {
         if (key != null && key.startsWith("cursor_")) updateLook();
+        if (Prefs.JOYSTICK.equals(key) && this.cheatSheet != null) updateKeyTexts();
     };
 
     private void updateLook() {
@@ -623,6 +625,31 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         hint("Click and long press act at the pointer while pointer mode is on.");
         spinnerPref(Prefs.LETTERS, "Letter keys in pointer mode", new String[] {Prefs.LETTERS_NOTHING, Prefs.LETTERS_EXIT},
                 new String[] {"Do nothing", "Turn pointer mode off"}, Prefs.LETTERS_NOTHING);
+
+        section("Joystick mode");
+        switchPref(Prefs.JOYSTICK, "Joystick mode", false);
+        hint("Splits the keyboard into thirds. Middle: a joystick. Touch, then hold your finger away from where it "
+                + "landed; the further away, the faster the pointer moves (your finger may leave the middle). Left: "
+                + "tap to click, tap twice to hold a drag (steer with the stick, tap either side to let go). Right: "
+                + "tap to long press. Taps in the middle do nothing. In scroll mode (Space) the stick scrolls.");
+        switchPref(Prefs.JOY_FLOAT, "Floating centre (where your finger lands)", true);
+        hint("Off: the centre is fixed in the middle of the stick area, so where you touch already sets the "
+                + "direction and speed.");
+        switchPref(Prefs.JOY_SPACEBAR, "Stick on the spacebar only", false);
+        hint("The stick only starts on the spacebar; other touches in the middle do nothing. The click zones "
+                + "stay at the sides. Pressing Space down still switches scroll mode.");
+        seekPref(Prefs.JOY_ZONE, "Click zone width (each side)", 15, 45, Prefs.JOY_ZONE_DEFAULT, 1,
+                v -> v + "% of the keyboard");
+        seekPref(Prefs.JOY_DEAD, "Stick dead zone", 0, 60, Prefs.JOY_DEAD_DEFAULT, 1,
+                v -> v == 0 ? "none" : String.format(Locale.US, "≈ %.1f mm", v / 1000f * PAD_WIDTH_MM));
+        seekPref(Prefs.JOY_REACH, "Distance for top speed", 4, 25, Prefs.JOY_REACH_DEFAULT, 1,
+                v -> String.format(Locale.US, "≈ %.0f mm", v / 100f * PAD_WIDTH_MM));
+        seekPref(Prefs.JOY_SPEED, "Stick top speed", 2, 40, Prefs.JOY_SPEED_DEFAULT, 1,
+                v -> String.format(Locale.US, "%.1f screen widths/s", v / 10f));
+        seekPref(Prefs.JOY_CURVE, "Stick response curve", 10, 40, Prefs.JOY_CURVE_DEFAULT, 1,
+                v -> v == 10 ? "linear" : String.format(Locale.US, "%.1f (finer near the centre)", v / 10f));
+        hint("Speed, acceleration, tap to click and tap-then-drag are for touchpad mode; the stick has its own "
+                + "settings above.");
     }
 
     private void buildTools() {
@@ -801,6 +828,9 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
     }
 
+    /** The Titan's keyboard area is about 78 mm wide (docs/titan-hardware.md). */
+    private static final float PAD_WIDTH_MM = 78f;
+
     private TextView toggleHint, homeAssistStatus, cheatSheet, scrollHint;
     private Button homeAssistButton;
 
@@ -811,13 +841,22 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         String lng = keyName(Prefs.LONG_KEY, Prefs.DEFAULT_LONG_KEY, Prefs.LONG_META, Prefs.DEFAULT_LONG_META);
         toggleHint.setText("Toggle with " + toggle + " or the Quick Settings tile “Keyboard pointer”. "
                 + "Keys are set under Controls.");
+        boolean joy = prefs.getBoolean(Prefs.JOYSTICK, false);
         StringBuilder sb = new StringBuilder();
-        sb.append("• Slide: move the pointer\n");
-        sb.append("• Tap: click · tap twice: double tap\n");
-        sb.append("• Tap, then touch again and move: drag\n");
+        if (joy) {
+            sb.append("Joystick mode (keyboard in thirds):\n");
+            sb.append("• Middle: hold away from where you touched to move; further = faster\n");
+            sb.append("• Left: tap to click · tap twice: hold a drag, tap again to let go\n");
+            sb.append("• Right: tap to long press\n");
+        } else {
+            sb.append("• Slide: move the pointer\n");
+            sb.append("• Tap: click · tap twice: double tap\n");
+            sb.append("• Tap, then touch again and move: drag\n");
+        }
         if (!"none".equals(click)) sb.append("• ").append(click).append(": click\n");
         if (!"none".equals(lng)) sb.append("• ").append(lng).append(": long press\n");
-        sb.append("• Space: scroll mode on/off (slides scroll, taps don't click)\n");
+        sb.append(joy ? "• Space: scroll mode on/off (the stick scrolls)\n"
+                : "• Space: scroll mode on/off (slides scroll, taps don't click)\n");
         if (!"none".equals(toggle)) sb.append("• ").append(toggle).append(": pointer mode on/off\n");
         sb.append("• Typing is ignored automatically");
         cheatSheet.setText(sb);
@@ -1139,8 +1178,9 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         root.addView(t);
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        final SeekBar sb = new SeekBar(this);
+        final MarkedSeekBar sb = new MarkedSeekBar(this);
         sb.setMax(max - min);
+        sb.setMark(Math.max(min, Math.min(max, def)) - min, (t.getCurrentTextColor() & 0x00FFFFFF) | 0x99000000, dp);
         int cur = Math.max(min, Math.min(max, prefs.getInt(key, def)));
         sb.setProgress(cur - min);
         t.setText(label + ": " + fmt.f(cur));
@@ -1170,6 +1210,39 @@ public final class MainActivity extends Activity implements PadLink.Listener {
             sb.setProgress(Math.min(max, up) - min);
         }));
         root.addView(row);
+    }
+
+    /**
+     * A slider with a small tick on its track at the default value, so the way back to it is visible. Drawn under
+     * the thumb, so it's hidden while the slider sits on the default. No snapping.
+     */
+    static final class MarkedSeekBar extends SeekBar {
+        private int mark = -1;
+        private float dp = 1f;
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+        MarkedSeekBar(Context c) {
+            super(c);
+        }
+
+        void setMark(int progress, int color, float dp) {
+            mark = progress;
+            this.dp = dp;
+            paint.setColor(color);
+            invalidate();
+        }
+
+        @Override
+        protected synchronized void onDraw(Canvas c) {
+            if (mark >= 0 && getMax() > 0) {
+                float left = getPaddingLeft(), right = getWidth() - getPaddingRight();
+                float x = left + (right - left) * mark / getMax();
+                float cy = getPaddingTop() + (getHeight() - getPaddingTop() - getPaddingBottom()) / 2f;
+                float h = 8 * dp, w = 1.5f * dp;
+                c.drawRect(x - w / 2, cy - h, x + w / 2, cy + h, paint);
+            }
+            super.onDraw(c);
+        }
     }
 
     /** A small square button that runs {@code action} once per tap and repeatedly while held. */

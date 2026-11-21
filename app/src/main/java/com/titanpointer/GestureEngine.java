@@ -13,6 +13,15 @@ import java.util.List;
  *   <li>scroll mode on: slides scroll instead, and taps never click; a quick flick keeps scrolling (fling)</li>
  * </ul>
  *
+ * Joystick mode ({@link Config#joystick}) splits the pad into three zones, chosen where a touch starts:
+ * <ul>
+ *   <li>middle: a joystick with a floating centre (where the finger landed; the finger may then leave the
+ *       middle zone). While held, the pointer moves on a timer at a speed set by the distance from the centre,
+ *       or scrolls in scroll mode. Taps here do nothing.</li>
+ *   <li>left: tap = click; tap twice = drag lock (the stick then drags) until the next tap on either side</li>
+ *   <li>right: tap = long press ("right click")</li>
+ * </ul>
+ *
  * Touches that start in the keyboard's top row (Back, Recents, home) are ignored entirely.
  * Pure Java with no Android dependencies so it can be unit tested on the JVM.
  */
@@ -30,6 +39,8 @@ public final class GestureEngine implements TouchTracker.Listener {
         void onScrollEnd(float vx, float vy);
         void onDragBegin();
         void onDragEnd();
+        /** Joystick mode's right zone: long press at the pointer. */
+        void onLongClick();
     }
 
     public interface Clock {
@@ -70,7 +81,37 @@ public final class GestureEngine implements TouchTracker.Listener {
          * top keyboard row: Shift, Recents, home, Back, Alt). Measured on raw device Y, before swap/invert.
          */
         public float ignoreTopFrac = 0f;
+
+        /** Joystick mode instead of touchpad mode. */
+        public boolean joystick = false;
+        /** Width of each click zone (left and right), as a fraction of the pad width. The middle is the stick. */
+        public float joyClickZone = 1f / 3f;
+        /** Distance from the stick's centre (pad widths) where the pointer starts to move. */
+        public float joyDeadZone = 0.015f;
+        /** Distance from the centre (pad widths) that gives full speed. */
+        public float joyReach = 0.10f;
+        /** Pointer speed at full deflection, in screen widths per second. */
+        public float joyMaxSpeed = 1.2f;
+        /** Response curve: speed = top speed × deflection^curve (deflection 0..1 past the dead zone). */
+        public float joyCurve = 2.0f;
+        /** A touch on a click zone held longer than this isn't a tap. */
+        public long joyClickMaxMs = 500;
+        /** The stick's centre is where the finger lands; otherwise the middle of the stick zone. */
+        public boolean joyFloating = true;
+        /** The stick only starts on the spacebar; other touches in the middle do nothing. */
+        public boolean joySpacebar = false;
     }
+
+    /**
+     * The spacebar on the raw pad (fractions of the device's X and Y ranges, Y = 0 at the top row). Estimated
+     * from a photo (docs/titan-hardware.md): bottom row Z X C V · Space · B N M · Enter on a 10-key grid, so Space
+     * is the 5th and 6th key widths; the letter rows share the 78% below the top row.
+     */
+    static final float SPACE_X0 = 0.40f, SPACE_X1 = 0.60f, SPACE_Y0 = 0.74f, SPACE_Y1 = 1.0f;
+
+    /** Joystick timer interval. */
+    static final long JOY_TICK_MS = 16;
+    private static final int ZONE_NONE = 0, ZONE_LEFT = 1, ZONE_MID = 2, ZONE_RIGHT = 3;
 
     private static final int MODE_NONE = 0, MODE_POINTER = 1, MODE_SCROLL = 2, MODE_DRAG = 3;
 
@@ -113,6 +154,21 @@ public final class GestureEngine implements TouchTracker.Listener {
     };
     private boolean clickPending = false;
 
+    // Joystick mode state.
+    private int joyZone = ZONE_NONE;
+    private float[] joyCenter, joyPos, joyStart;
+    private boolean joyMoved;
+    private boolean dragLock = false;
+    private long lastTick;
+    private boolean ticking = false;
+    private final Runnable joyTick = new Runnable() {
+        @Override
+        public void run() {
+            ticking = false;
+            tick(clock.now());
+        }
+    };
+
     public GestureEngine(Actions actions, Clock clock, Scheduler scheduler) {
         this.actions = actions;
         this.clock = clock;
@@ -120,7 +176,14 @@ public final class GestureEngine implements TouchTracker.Listener {
     }
 
     public void setConfig(Config c) {
+        boolean switched = c.joystick != cfg.joystick;
+        if (switched) reset();
         this.cfg = c;
+    }
+
+    /** True while joystick mode's drag lock holds the injected finger down. */
+    public boolean isDragLocked() {
+        return dragLock;
     }
 
     public Config getConfig() {
@@ -153,8 +216,11 @@ public final class GestureEngine implements TouchTracker.Listener {
     /** Abandon any gesture in progress (e.g. when pointer mode is switched off). */
     public void reset() {
         if (scrollActive) actions.onScrollEnd(0, 0);
-        if (mode == MODE_DRAG) actions.onDragEnd();
+        if (mode == MODE_DRAG || dragLock) actions.onDragEnd();
         cancelPendingClick();
+        stopTicking();
+        dragLock = false;
+        joyZone = ZONE_NONE;
         touching = false;
         ignored = false;
         scrollActive = false;
@@ -169,6 +235,11 @@ public final class GestureEngine implements TouchTracker.Listener {
         clickPending = false;
     }
 
+    private void stopTicking() {
+        if (ticking) scheduler.cancel(joyTick);
+        ticking = false;
+    }
+
     @Override
     public void onFrame(List<TouchTracker.Contact> contacts) {
         long now = clock.now();
@@ -177,6 +248,10 @@ public final class GestureEngine implements TouchTracker.Listener {
         for (TouchTracker.Contact x : contacts) {
             if (normalize(x.x, x.y) == null) continue;
             if (c == null || (touching && x.id == trackedId)) c = x;
+        }
+        if (cfg.joystick) {
+            joyFrame(now, c);
+            return;
         }
 
         if (c == null) {
@@ -306,6 +381,161 @@ public final class GestureEngine implements TouchTracker.Listener {
         }
         dragCandidate = false;
         clickOwed = false;
+    }
+
+    // ---- Joystick mode ----
+
+    private void joyFrame(long now, TouchTracker.Contact c) {
+        if (c == null) {
+            if (touching) joyEnd(now);
+            prev = null;
+            lastFrameTime = now;
+            return;
+        }
+        float[] p = normalize(c.x, c.y);
+        if (!touching) joyBegin(now, c, p);
+        trackedId = c.id;
+        joyPos = p;
+        if (joyStart != null && Math.hypot(p[0] - joyStart[0], p[1] - joyStart[1]) > cfg.tapSlop) joyMoved = true;
+        lastFrameTime = now;
+    }
+
+    private void joyBegin(long now, TouchTracker.Contact c, float[] p) {
+        touching = true;
+        trackedId = c.id;
+        touchStart = now;
+        lastFrameTime = now;
+        keyDuringTouch = now - lastKeyTime < cfg.typingSuppressMs;
+        scrollActive = false;
+        joyMoved = false;
+        joyStart = p;
+        joyCenter = p;
+        joyPos = p;
+        dragCandidate = false;
+        float yRange = Math.max(1, cfg.yMax - cfg.yMin);
+        ignored = cfg.ignoreTopFrac > 0 && (c.y - cfg.yMin) / yRange < cfg.ignoreTopFrac;
+        if (ignored) {
+            joyZone = ZONE_NONE;
+            return;
+        }
+        float u = p[0];
+        float rx = (c.x - cfg.xMin) / (float) Math.max(1, cfg.xMax - cfg.xMin);
+        float ry = (c.y - cfg.yMin) / yRange;
+        if (cfg.joySpacebar && onSpacebar(rx, ry)) joyZone = ZONE_MID;
+        else if (u < cfg.joyClickZone) joyZone = ZONE_LEFT;
+        else if (u > 1f - cfg.joyClickZone) joyZone = ZONE_RIGHT;
+        else joyZone = cfg.joySpacebar ? ZONE_NONE : ZONE_MID; // spacebar only: the rest of the middle does nothing
+        if (joyZone == ZONE_MID) {
+            if (!cfg.joyFloating) joyCenter = fixedCenter();
+            // A click still waiting for a possible second tap goes out now, where the pointer is, before it moves.
+            if (clickPending) {
+                cancelPendingClick();
+                actions.onClick();
+            }
+            lastTick = now;
+            stopTicking();
+            ticking = true;
+            scheduler.post(joyTick, JOY_TICK_MS);
+        } else if (joyZone == ZONE_LEFT && clickPending && !dragLock
+                && now - lastTapUp <= cfg.doubleTapWindowMs) {
+            cancelPendingClick();
+            dragCandidate = true; // second tap: drag lock if it's a tap too
+        }
+    }
+
+    private void tick(long now) {
+        if (!touching || joyZone != ZONE_MID || !cfg.joystick) return;
+        long dt = Math.min(50, Math.max(0, now - lastTick));
+        lastTick = now;
+        if (!keyDuringTouch && now - lastKeyTime >= cfg.typingSuppressMs && joyPos != null) {
+            float ox = joyPos[0] - joyCenter[0], oy = joyPos[1] - joyCenter[1];
+            float d = (float) Math.hypot(ox, oy);
+            float v = joySpeed(d); // px per second
+            if (v > 0) {
+                float step = v * dt / 1000f;
+                float dx = ox / d * step, dy = oy / d * step;
+                if (scrollLock && !dragLock) {
+                    if (!scrollActive) {
+                        scrollActive = true;
+                        mode = MODE_SCROLL;
+                        actions.onScrollBegin();
+                    }
+                    // Scroll speed 1.5× (the default) scrolls as fast as the pointer would move.
+                    float k = cfg.scrollSpeed / 1.5f * (cfg.invertScroll ? -1f : 1f);
+                    actions.onScroll(dx * k, dy * k);
+                } else {
+                    actions.onPointerMove(dx, dy);
+                }
+            }
+        }
+        ticking = true;
+        scheduler.post(joyTick, JOY_TICK_MS);
+    }
+
+    static boolean onSpacebar(float rx, float ry) {
+        return rx >= SPACE_X0 && rx <= SPACE_X1 && ry >= SPACE_Y0 && ry <= SPACE_Y1;
+    }
+
+    /** The fixed stick centre: the middle of the spacebar, or of the middle zone below the ignored top row. */
+    float[] fixedCenter() {
+        float fx, fy;
+        if (cfg.joySpacebar) {
+            fx = (SPACE_X0 + SPACE_X1) / 2f;
+            fy = (SPACE_Y0 + SPACE_Y1) / 2f;
+        } else {
+            fx = 0.5f;
+            fy = cfg.ignoreTopFrac + (1f - cfg.ignoreTopFrac) / 2f;
+        }
+        int x = Math.round(cfg.xMin + fx * (cfg.xMax - cfg.xMin));
+        int y = Math.round(cfg.yMin + fy * (cfg.yMax - cfg.yMin));
+        float[] c = normalize(x, y);
+        return c != null ? c : joyStart;
+    }
+
+    /** Pointer speed in px/s for a stick deflection of {@code d} pad widths from the centre. */
+    float joySpeed(float d) {
+        if (d <= cfg.joyDeadZone) return 0f;
+        float t = clamp((d - cfg.joyDeadZone) / Math.max(0.001f, cfg.joyReach - cfg.joyDeadZone), 0f, 1f);
+        return (float) Math.pow(t, cfg.joyCurve) * cfg.joyMaxSpeed * cfg.screenWidthPx;
+    }
+
+    private void joyEnd(long now) {
+        touching = false;
+        stopTicking();
+        int zone = joyZone;
+        joyZone = ZONE_NONE;
+        boolean second = dragCandidate;
+        dragCandidate = false;
+        if (ignored) {
+            ignored = false;
+            return;
+        }
+        if (scrollActive) {
+            scrollActive = false;
+            actions.onScrollEnd(0, 0);
+        }
+        mode = dragLock ? MODE_DRAG : MODE_NONE;
+        if (zone != ZONE_LEFT && zone != ZONE_RIGHT) return; // the stick: taps do nothing
+        boolean tap = !keyDuringTouch && !joyMoved && now - touchStart <= cfg.joyClickMaxMs;
+        if (!tap) {
+            if (second && !keyDuringTouch) actions.onClick(); // the first tap still counts
+            return;
+        }
+        if (dragLock) {
+            dragLock = false;
+            mode = MODE_NONE;
+            actions.onDragEnd();
+        } else if (zone == ZONE_RIGHT) {
+            actions.onLongClick();
+        } else if (second) {
+            dragLock = true;
+            mode = MODE_DRAG;
+            actions.onDragBegin();
+        } else {
+            clickPending = true;
+            lastTapUp = now;
+            scheduler.post(pendingClick, cfg.doubleTapWindowMs);
+        }
     }
 
     private void addSample(long t, long prevT, float du, float dv) {

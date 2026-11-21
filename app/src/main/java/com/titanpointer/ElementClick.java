@@ -24,6 +24,11 @@ final class ElementClick {
 
     /** The element to click at (x, y), or null to send a normal tap. Never a virtual (web/Compose) node. */
     static AccessibilityNodeInfo find(AccessibilityService svc, int x, int y) {
+        return find(svc, x, y, false);
+    }
+
+    /** Like {@link #find(AccessibilityService, int, int)}, but for a long press: the first long-clickable element. */
+    static AccessibilityNodeInfo find(AccessibilityService svc, int x, int y, boolean longClick) {
         List<AccessibilityWindowInfo> ws;
         try {
             ws = new ArrayList<>(svc.getWindows());
@@ -45,7 +50,7 @@ final class ElementClick {
                 AccessibilityNodeInfo n = path.get(i);
                 if (isVirtual(n)) return null; // web page or Compose: taps work there
                 if (!n.isEnabled()) return null;
-                if (n.isClickable() || n.isEditable()) {
+                if (longClick ? n.isLongClickable() : (n.isClickable() || n.isEditable())) {
                     for (int j = i - 1; j >= 0; j--) if (isVirtual(path.get(j))) return null;
                     return n;
                 }
@@ -63,6 +68,11 @@ final class ElementClick {
         }
         if (n.isClickable()) ok = n.performAction(AccessibilityNodeInfo.ACTION_CLICK) || ok;
         return ok;
+    }
+
+    /** Long-press the element. Returns true if the app accepted it. */
+    static boolean longClick(AccessibilityNodeInfo n) {
+        return n.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK);
     }
 
     static String describe(AccessibilityNodeInfo n) {
