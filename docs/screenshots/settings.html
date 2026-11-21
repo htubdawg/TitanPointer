@@ -69,7 +69,7 @@
   <div class="scroll" id="scroll"><div class="content" id="content"></div></div>
 </div>
 <script>
-  // Mirrors MainActivity.build() as of 1.22 (no-root mode; Advanced and Diagnostics collapsed).
+  // Mirrors MainActivity.build() as of 1.23 (no-root mode; Advanced and Diagnostics collapsed).
   const c = document.getElementById('content');
   const add = (html) => c.insertAdjacentHTML('beforeend', html);
   const section = (t) => add(`<div class="section">${t}</div>`);
@@ -115,6 +115,17 @@
   seek('Ignore touches after a key press', 0, 1000, 350, (v) => v + ' ms');
   seek('Ignore touches that start in the top key row', 0, 40, 22, (v) => v === 0 ? 'off' : v + '% of the keyboard');
   hint('The top row (Shift, Recents, the home key, Back, Alt) is part of the touch surface. Touches that start there don’t move the pointer or click; a slide that starts lower can still run into it.');
+
+  section('Titan scroll assistant');
+  text('✗ TitanPointer isn’t allowed to switch the scroll assistant yet.');
+  text('To let TitanPointer switch it, enable USB debugging, connect a computer and run this once (it stays granted through updates):');
+  add('<div class="text" style="font-family:monospace;font-size:12px">adb shell pm grant com.titanpointer android.permission.WRITE_SECURE_SETTINGS</div>');
+  add(button('Copy command'));
+  const dim = (f) => { const n = c.children.length; f(); c.lastElementChild.style.opacity = 0.45; };
+  dim(() => sw('Make keyboard taps click buttons', true));
+  hint('After a keyboard touch the Titan refuses taps on ordinary buttons (toolbars, address bars) until a key is pressed. This turns the scroll assistant off for a moment at each tap click, then back on.');
+  dim(() => sw('Turn the scroll assistant off when pointer mode is off', false));
+  hint('The keyboard stops scrolling pages while pointer mode is off. Turning pointer mode on turns it back on, since the pointer needs it. If you turn the TitanPointer service off, the scroll assistant stays as it was.');
 
   section('Scrolling (Space turns scroll mode on/off)');
   hint('In scroll mode, slides scroll and taps never click.');

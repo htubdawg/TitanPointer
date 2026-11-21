@@ -91,6 +91,7 @@ public final class PointerService extends AccessibilityService
         Diag.setEnabled(prefs.getBoolean(Prefs.DIAG, false));
         prefs.registerOnSharedPreferenceChangeListener(this);
         link.addListener(this);
+        repairAssist();
         if (prefs.getBoolean(Prefs.ENABLED, true)) activate();
         PointerTileService.requestUpdate(this);
         startKeepAlive();
@@ -197,6 +198,7 @@ public final class PointerService extends AccessibilityService
         if (active) return;
         active = true;
         Diag.log("pointer mode ON (" + (isNoRoot(prefs) ? "no root" : "helper") + "), foreground: " + foreground);
+        assistFollowPointer(true); // the pointer needs the scroll assistant to get keyboard touches
         tracker.reset();
         engine.setScrollLock(false);
         engine.setConfig(Prefs.engineConfig(this, screenW));
@@ -230,6 +232,8 @@ public final class PointerService extends AccessibilityService
         main.removeCallbacks(delayedPadClick);
         cancelScrollWait();
         main.removeCallbacks(timerKeyClick);
+        assistRestore.run(); // a click in progress: scroll assistant back on first
+        assistFollowPointer(false);
         trace.reset();
         scrollHeld = false;
         if (cursor != null) cursor.setState(CursorView.STATE_NORMAL);
@@ -520,6 +524,19 @@ public final class PointerService extends AccessibilityService
                 else deactivate();
                 PointerTileService.requestUpdate(this);
                 break;
+            case Prefs.ASSIST_FOLLOWS_POINTER:
+                if (!ScrollAssist.canWrite(this)) break;
+                // Turned on: match pointer mode now. Turned off: leave the keyboard scrolling on, as before.
+                boolean follow = p.getBoolean(Prefs.ASSIST_FOLLOWS_POINTER, false);
+                boolean want = !follow || active;
+                if (ScrollAssist.isOn(this) != want) {
+                    boolean ok = ScrollAssist.set(this, want);
+                    Diag.log("scroll assistant " + (want ? "on" : "off") + " (setting changed)" + (ok ? "" : " FAILED"));
+                }
+                break;
+            case Prefs.ASSIST_OFF_FOR_CLICK:
+            case Prefs.CLICK_FIX:
+                break;
             case Prefs.GRAB:
                 if (active) link.setGrab(p.getBoolean(Prefs.GRAB, false));
                 break;
@@ -734,9 +751,118 @@ public final class PointerService extends AccessibilityService
         if (!active) return;
         setCursorVisible(true);
         flash();
+        if (fromPad && (assistCycle || clickFixApplies())) {
+            clickWithAssistOff(source, x, y);
+            return;
+        }
+        sendTap(source, fromPad, x, y, null);
+    }
+
+    private void sendTap(String source, boolean fromPad, float x, float y, final GestureInjector.Result done) {
         final int n = trace.click(source, fromPad, x, y, focusWindowTouchMode());
         if (Diag.isEnabled()) Diag.log("  " + TITAN_SCROLL_PROP + " = " + titanScrollProp());
-        injector.tap(x, y, Diag.isEnabled() ? what -> trace.tapResult(n, what) : null);
+        final boolean log = Diag.isEnabled();
+        injector.tap(x, y, log || done != null ? what -> {
+            if (log) trace.tapResult(n, what);
+            if (done != null) done.on(what);
+        } : null);
+    }
+
+    // ---- Click fix: scroll assistant off for each keyboard-tap click ----
+    // A keyboard touch makes the Titan set debug.sf.forcescroll_view=yes, and while it's yes the phone's
+    // View.onTouchEvent refuses taps on standard buttons. With WRITE_SECURE_SETTINGS (granted once over ADB)
+    // we turn the scroll assistant off, wait for the switch to read no, tap, and turn it back on.
+
+    private static final long ASSIST_POLL_MS = 10, ASSIST_WAIT_MAX_MS = 1000, ASSIST_RESTORE_MAX_MS = 2000;
+    private boolean assistCycle = false; // the scroll assistant is off for clicks right now
+    private boolean assistWaiting = false; // waiting for the switch to read no
+    private long assistStart;
+    private int assistTapsOut = 0;
+    private final List<Object[]> assistTaps = new ArrayList<>(); // {source, x, y} waiting for the switch
+
+    private boolean clickFixApplies() {
+        return prefs.getBoolean(Prefs.CLICK_FIX, true) && ScrollAssist.canWrite(this)
+                && "yes".equals(titanScrollProp()) && ScrollAssist.isOn(this);
+    }
+
+    private void clickWithAssistOff(String source, float x, float y) {
+        if (assistCycle && !assistWaiting) { // switch already off: tap straight away within this cycle
+            sendAssistTap(source, x, y);
+            return;
+        }
+        assistTaps.add(new Object[] {source, x, y});
+        if (assistCycle) return;
+        assistCycle = true;
+        assistWaiting = true;
+        assistTapsOut = 0;
+        assistStart = SystemClock.uptimeMillis();
+        prefs.edit().putBoolean(Prefs.ASSIST_OFF_FOR_CLICK, true).commit(); // survives a crash before restore
+        boolean ok = ScrollAssist.set(this, false);
+        Diag.log("click fix: scroll assistant off " + (ok ? "" : "FAILED ") + "(" + source + ")");
+        main.post(assistPoll);
+        main.postDelayed(assistRestore, ASSIST_RESTORE_MAX_MS); // never leave it off
+    }
+
+    private final Runnable assistPoll = new Runnable() {
+        @Override
+        public void run() {
+            if (!assistCycle) return;
+            long waited = SystemClock.uptimeMillis() - assistStart;
+            boolean off = !"yes".equals(titanScrollProp());
+            if (!off && waited < ASSIST_WAIT_MAX_MS) {
+                main.postDelayed(this, ASSIST_POLL_MS);
+                return;
+            }
+            assistWaiting = false;
+            Diag.log(off ? "click fix: " + TITAN_SCROLL_PROP + " is no after " + waited + " ms, clicking"
+                    : "click fix: " + TITAN_SCROLL_PROP + " still yes after " + waited + " ms, clicking anyway");
+            List<Object[]> taps = new ArrayList<>(assistTaps);
+            assistTaps.clear();
+            for (Object[] t : taps) sendAssistTap((String) t[0], (Float) t[1], (Float) t[2]);
+            if (assistTapsOut == 0) assistRestore.run();
+        }
+    };
+
+    private void sendAssistTap(String source, float x, float y) {
+        assistTapsOut++;
+        sendTap(source + ", scroll assistant off", true, x, y, what -> {
+            if (what.startsWith("sent") || what.startsWith("queued")) return;
+            if (--assistTapsOut <= 0 && !assistWaiting) main.post(assistRestore);
+        });
+    }
+
+    /** End the click fix cycle: scroll assistant back on. */
+    private final Runnable assistRestore = new Runnable() {
+        @Override
+        public void run() {
+            main.removeCallbacks(this);
+            if (!assistCycle) return;
+            assistCycle = false;
+            assistWaiting = false;
+            assistTaps.clear();
+            assistTapsOut = 0;
+            main.removeCallbacks(assistPoll);
+            boolean ok = ScrollAssist.set(PointerService.this, true);
+            prefs.edit().putBoolean(Prefs.ASSIST_OFF_FOR_CLICK, false).commit();
+            Diag.log("click fix: scroll assistant back on" + (ok ? "" : " FAILED") + " after "
+                    + (SystemClock.uptimeMillis() - assistStart) + " ms");
+        }
+    };
+
+    /** A click left the scroll assistant off (the app died mid-click): turn it back on. */
+    private void repairAssist() {
+        if (!prefs.getBoolean(Prefs.ASSIST_OFF_FOR_CLICK, false)) return;
+        boolean ok = ScrollAssist.set(this, true);
+        prefs.edit().putBoolean(Prefs.ASSIST_OFF_FOR_CLICK, false).commit();
+        Diag.log("scroll assistant was left off by an interrupted click: turned back on" + (ok ? "" : " FAILED"));
+    }
+
+    /** "Scroll assistant off when pointer mode is off": follow pointer mode. */
+    private void assistFollowPointer(boolean pointerOn) {
+        if (!prefs.getBoolean(Prefs.ASSIST_FOLLOWS_POINTER, false) || !ScrollAssist.canWrite(this)) return;
+        if (ScrollAssist.isOn(this) == pointerOn) return;
+        boolean ok = ScrollAssist.set(this, pointerOn);
+        Diag.log("scroll assistant " + (pointerOn ? "on" : "off") + " with pointer mode" + (ok ? "" : " FAILED"));
     }
 
     private void onLongPress() {

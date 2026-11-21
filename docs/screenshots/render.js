@@ -8,7 +8,7 @@ const path = require('path');
   await page.goto('file://' + path.join(__dirname, 'settings.html'));
   await page.evaluate(() => document.fonts.ready);
   // Each shot scrolls the settings list so that this section heading is near the top.
-  const shots = [['settings-1.png', null], ['settings-2.png', 'Pointer'], ['settings-3.png', 'Keys']];
+  const shots = [['settings-1.png', null], ['settings-2.png', 'Pointer'], ['settings-3.png', 'Titan scroll assistant'], ['settings-4.png', 'Keys']];
   for (const [file, heading] of shots) {
     await page.evaluate((h) => {
       const s = document.getElementById('scroll');

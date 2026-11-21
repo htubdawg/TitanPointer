@@ -277,6 +277,24 @@ Diagnostics capture is off by default (`Prefs.DIAG` default false, `Diag.enabled
 screen and the software search switch it on themselves). The Diagnostics section is collapsible like Advanced
 (shared `MainActivity.collapsible()`), expanded only when capturing is on.
 
+## v1.23: switch the scroll assistant (click fix)
+User's ADB tests: the Titan's Scroll Assistant switch writes Settings.Global **`touchpad_switch_value`** (1/0;
+`touchpad_switch` stays 1) and the phone mirrors it into `persist.sys.touchpad_switch`; `adb shell settings put
+global touchpad_switch_value 0` alone really turns keyboard scrolling off. The user is sure turning it off clears
+the tap block. 1.23 declares WRITE_SECURE_SETTINGS (granted once: `adb shell pm grant com.titanpointer
+android.permission.WRITE_SECURE_SETTINGS`; needs the build installed first). `ScrollAssist` reads/writes it.
+- **Click fix** (`Prefs.CLICK_FIX`, default on, needs the grant): a keyboard-tap click while
+  `debug.sf.forcescroll_view`=yes turns the assistant off, polls the switch every 10 ms (max 1 s) for `no`,
+  taps (double taps are both sent in the same cycle), then turns it back on when the tap(s) finish (2 s cap).
+  `Prefs.ASSIST_OFF_FOR_CLICK` is committed while it's off; still set at service start = repaired (back on).
+  The app otherwise never touches the assistant at start-up (the user asked for that). Logged in Diag ("click fix").
+- **`Prefs.ASSIST_FOLLOWS_POINTER`** (default off, the user's request: they dislike keyboard scrolling): pointer mode
+  on → assistant on, off → off. Turning the setting off turns the assistant back on. Service stopped while
+  pointer mode is off = it stays off. The toggle key still works (keys aren't pad touches).
+- Settings section "Titan scroll assistant" (between Clicking and Scrolling) shows the grant command until granted.
+- Unconfirmed on the phone: that the switch drops to `no` when the assistant goes off, and that turning it back on
+  doesn't lose a keyboard touch.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

@@ -52,6 +52,12 @@ public final class Prefs {
     public static final String TAP_DELAY_TEST = "tap_delay_test";
     /** Diagnostics test: the click key's click is sent from a timer instead of the key callback (off by default). */
     public static final String KEY_TIMER_TEST = "key_timer_test";
+    /** Turn the Titan's scroll assistant off for each keyboard-tap click (needs WRITE_SECURE_SETTINGS; on by default). */
+    public static final String CLICK_FIX = "click_fix";
+    /** Scroll assistant off whenever pointer mode is off, on while it's on (needs WRITE_SECURE_SETTINGS; off by default). */
+    public static final String ASSIST_FOLLOWS_POINTER = "assist_follows_pointer";
+    /** Set (committed) while a click has the scroll assistant off; still set at start-up = it was left off by a crash. */
+    public static final String ASSIST_OFF_FOR_CLICK = "assist_off_for_click";
     /** Capture the in-memory diagnostics log (off by default). */
     public static final String DIAG = "diag";
     public static final String ADB_PORT = "adb_port", ADB_TOKEN = "adb_token";
