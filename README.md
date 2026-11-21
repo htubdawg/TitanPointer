@@ -3,6 +3,8 @@
 Turns the touch-sensitive physical keyboard of the original **Unihertz Titan** (2019) into a laptop-style
 touchpad with an on-screen mouse pointer. No root needed.
 
+▶ **[See it in action on a real Titan (YouTube video)](https://youtube.com/shorts/xKueMopw8ow)**
+
 > **AI-generated code.** All of the code in this repository was written by an AI (Claude, by Anthropic),
 > directed and tested by a human on a real Titan. Review it before you trust it with anything important.
 
