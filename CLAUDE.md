@@ -361,6 +361,16 @@ hotspot when it's at the edge, small on top otherwise. Pointer tab: Pointer look
 glyph grid + Custom, colours, custom box, size, hide when idle), Movement, Direction. render.js reads the glyphs from
 RetroCursors.java into settings.html.
 
+## v1.29
+User: include **all** 77 glyphs (not a pick), in a scrolling box; Pointer look moved to the **bottom** of the Pointer tab
+(order: Movement incl. hide-when-idle, Direction, Pointer look); **Mirror** (`cursor_mirror`, flips bitmap + hotspot,
+custom too); **Invert colours** (`cursor_invert`). A true XOR/screen-inverting cursor is impossible for an overlay
+window (can't read what's under it; screen capture would need MediaProjection and lag), so invert = swap fill and
+outline (custom image: RGB inverted). Told the user; change it if they meant something else. Box = fixed 200 dp
+ScrollView, 7 unlabeled tiles per row, the selected cursor's name above it; it calls
+requestDisallowInterceptTouchEvent on DOWN so drags inside scroll the box, and scrolls to the selected row on open.
+Glyph order: pointer-like first (`FIRST` in scripts/retro-cursors.py), the rest in font order; labels in `LABELS`.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

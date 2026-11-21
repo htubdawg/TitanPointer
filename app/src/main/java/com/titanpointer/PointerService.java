@@ -545,6 +545,8 @@ public final class PointerService extends AccessibilityService
             case Prefs.CURSOR_COLOR:
             case Prefs.CURSOR_HOTSPOT:
             case Prefs.CURSOR_IMAGE_VER:
+            case Prefs.CURSOR_MIRROR:
+            case Prefs.CURSOR_INVERT:
                 cursor.loadLook(this, p);
                 lp.x = Integer.MIN_VALUE; // the hotspot may have moved: force a relayout
                 placeCursor();

@@ -13,7 +13,7 @@ const path = require('path');
   await page.goto('file://' + path.join(__dirname, 'settings.html'));
   await page.evaluate(() => document.fonts.ready);
   // Each shot opens a tab and, optionally, scrolls so that a section heading is near the top.
-  const shots = [['settings-1.png', 0, null], ['settings-2.png', 1, null], ['settings-3.png', 2, null], ['settings-4.png', 2, 'Keys'],
+  const shots = [['settings-1.png', 0, null], ['settings-2.png', 1, 'Pointer look'], ['settings-3.png', 2, null], ['settings-4.png', 2, 'Keys'],
                  ['settings-5.png', 3, null], ['settings-6.png', 4, null]];
   for (const [file, tab, heading] of shots) {
     await page.evaluate(([t, h]) => {

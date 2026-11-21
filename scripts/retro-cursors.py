@@ -9,11 +9,22 @@ Each glyph is merged with its _mask glyph; the hotspot is the glyph origin.
 """
 import sys
 
-PICK = [('left_ptr', 'Arrow'), ('top_left_arrow', 'Top-left'), ('arrow', 'Diagonal'), ('draft_large', 'Draft'),
-        ('right_ptr', 'Right'), ('question_arrow', 'Help'), ('hand2', 'Hand'), ('hand1', 'Hand 2'), ('pencil', 'Pencil'),
-        ('crosshair', 'Crosshair'), ('tcross', 'Cross'), ('target', 'Target'), ('circle', 'Circle'), ('dot', 'Dot'),
-        ('X_cursor', 'X'), ('pirate', 'Pirate'), ('heart', 'Heart'), ('coffee_mug', 'Mug'), ('spider', 'Spider'),
-        ('gumby', 'Gumby'), ('trek', 'Trek'), ('star', 'Star'), ('shuttle', 'Shuttle')]
+# Pointer-like glyphs first (in this order), then every other glyph in font order.
+FIRST = ['left_ptr', 'top_left_arrow', 'arrow', 'draft_large', 'draft_small', 'right_ptr', 'center_ptr', 'question_arrow',
+         'hand2', 'hand1', 'pencil', 'crosshair', 'tcross', 'cross', 'plus', 'target', 'circle', 'dot', 'dotbox', 'X_cursor']
+LABELS = {'left_ptr': 'Arrow', 'top_left_arrow': 'Top-left arrow', 'arrow': 'Diagonal arrow', 'draft_large': 'Draft (large)',
+          'draft_small': 'Draft (small)', 'right_ptr': 'Right arrow', 'center_ptr': 'Up arrow', 'question_arrow': 'Help',
+          'hand2': 'Hand', 'hand1': 'Hand 2', 'tcross': 'Thin cross', 'X_cursor': 'X', 'xterm': 'Text (I-beam)',
+          'fleur': 'Move', 'coffee_mug': 'Coffee mug', 'rtl_logo': 'RTL logo', 'sb_h_double_arrow': 'Left-right arrow',
+          'sb_v_double_arrow': 'Up-down arrow', 'sb_up_arrow': 'Up', 'sb_down_arrow': 'Down', 'sb_left_arrow': 'Left',
+          'sb_right_arrow': 'Right', 'll_angle': 'Lower-left angle', 'lr_angle': 'Lower-right angle',
+          'ul_angle': 'Upper-left angle', 'ur_angle': 'Upper-right angle', 'bogosity': 'Bogosity', 'gumby': 'Gumby',
+          'trek': 'Trek', 'gobbler': 'Gobbler', 'iron_cross': 'Iron cross', 'leftbutton': 'Left button',
+          'middlebutton': 'Middle button', 'rightbutton': 'Right button'}
+
+
+def label(n):
+    return LABELS.get(n) or n.replace('_', ' ').capitalize()
 bdf = open(sys.argv[1]).read().split('STARTCHAR ')[1:]
 g = {}
 for ch in bdf:
@@ -75,12 +86,13 @@ final class RetroCursors {
     static final Glyph[] ALL = {'''
 
 lines = [HEADER]
-for n, label in PICK:
+order = FIRST + [n for n in out if n not in FIRST]
+for n in order:
     g = out[n]
-    lines.append('            new Glyph("%s", "%s", %d, %d,' % (n, label, g['hx'], g['hy']))
+    lines.append('            new Glyph("%s", "%s", %d, %d,' % (n, label(n), g['hx'], g['hy']))
     for i, r in enumerate(g['rows']):
         lines.append('                    "%s"%s' % (r, ',' if i < len(g['rows']) - 1 else '),'))
 lines += ['    };', '', '    static Glyph find(String id) {', '        for (Glyph g : ALL) if (g.id.equals(id)) return g;',
           '        return null;', '    }', '}', '']
 open('app/src/main/java/com/titanpointer/RetroCursors.java', 'w').write('\n'.join(lines))
-print('wrote', len(PICK), 'glyphs')
+print('wrote', len(order), 'glyphs')

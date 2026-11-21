@@ -229,50 +229,80 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
     private void buildPointer() {
         root = pageBodies[POINTER];
+        section("Movement");
+        seekPref(Prefs.SENS, "Speed", Prefs.SENS_MIN, Prefs.SENS_MAX, Prefs.SENS_DEFAULT, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
+        seekPref(Prefs.ACCEL, "Acceleration", 0, 40, 10, 1, v -> String.format(Locale.US, "%.1f", v / 10f));
+        seekPref(Prefs.YSPEED, "Vertical speed", 3, 40, 10, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
+        seekPref(Prefs.AUTOHIDE_S, "Hide pointer when idle", 0, 30, 5, 1, v -> v == 0 ? "never" : v + " s");
+
+        section("Direction");
+        switchPref(Prefs.SWAP, "Swap X and Y", false);
+        switchPref(Prefs.INV_X, "Invert horizontal", false);
+        switchPref(Prefs.INV_Y, "Invert vertical", false);
+
+        // --- Look, at the bottom
         section("Pointer look");
+        customImage = PointerShape.loadCustom(this);
         lookPreview = new LookView(true);
         root.addView(lookPreview, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (72 * dp)));
-        hint("Classic cursors from the X Window System (the original Unix/Linux pointer font), or your own picture.");
+        lookName = text("");
+        lookName.setGravity(Gravity.CENTER);
+        hint("All " + RetroCursors.ALL.length + " cursors of the X Window System's cursor font (the original Unix/Linux "
+                + "pointers), or your own picture at the end. Scroll the box to see them all.");
+
+        // A fixed-height box that scrolls by itself inside the page.
+        lookBox = new ScrollView(this);
+        lookBox.setNestedScrollingEnabled(true);
+        lookBox.setVerticalScrollBarEnabled(true);
+        lookBox.setScrollbarFadingEnabled(false);
+        android.graphics.drawable.GradientDrawable frame = new android.graphics.drawable.GradientDrawable();
+        frame.setCornerRadius(6 * dp);
+        frame.setStroke((int) (1 * dp), 0x61808080);
+        lookBox.setBackground(frame);
+        lookBox.setPadding((int) (4 * dp), (int) (4 * dp), (int) (4 * dp), (int) (4 * dp));
+        lookBox.setClipToPadding(false);
+        lookBox.setOnTouchListener((v, e) -> {
+            // Drags inside the box scroll the box, not the page.
+            if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+                v.getParent().requestDisallowInterceptTouchEvent(true);
+            }
+            return false;
+        });
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        lookBox.addView(grid);
+        root.addView(lookBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (200 * dp)));
         int count = RetroCursors.ALL.length + 1;
-        final int perRow = 6;
-        LinearLayout tiles = null;
+        final int perRow = 7;
+        LinearLayout row = null;
         for (int i = 0; i < count; i++) {
             final boolean isCustom = i == RetroCursors.ALL.length;
             final String style = isCustom ? PointerShape.CUSTOM : RetroCursors.ALL[i].id;
-            String label = isCustom ? "Custom" : RetroCursors.ALL[i].label;
             if (i % perRow == 0) {
-                tiles = new LinearLayout(this);
-                tiles.setPadding(0, (int) (4 * dp), 0, 0);
-                root.addView(tiles);
+                row = new LinearLayout(this);
+                grid.addView(row);
             }
-            LinearLayout tile = new LinearLayout(this);
-            tile.setOrientation(LinearLayout.VERTICAL);
-            tile.setGravity(Gravity.CENTER_HORIZONTAL);
-            tile.setPadding(0, (int) (4 * dp), 0, (int) (4 * dp));
-            tile.setClickable(true);
-            tile.setFocusable(true);
-            tile.setContentDescription(label + " pointer");
             LookView v = new LookView(false);
             v.style = style;
-            tile.addView(v, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (44 * dp)));
-            TextView name = new TextView(this);
-            name.setText(label);
-            name.setTextSize(12);
-            name.setSingleLine(true);
-            name.setGravity(Gravity.CENTER);
-            tile.addView(name);
-            tile.setOnClickListener(x -> {
+            v.setClickable(true);
+            v.setFocusable(true);
+            v.setContentDescription((isCustom ? "Custom picture" : RetroCursors.ALL[i].label) + " pointer");
+            v.setOnClickListener(x -> {
                 if (isCustom && customImage == null) {
                     pickImage();
                     return;
                 }
                 prefs.edit().putString(Prefs.CURSOR_STYLE, style).apply();
             });
-            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            tlp.setMargins((int) (2 * dp), 0, (int) (2 * dp), 0);
-            tiles.addView(tile, tlp);
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, (int) (52 * dp), 1f);
+            tlp.setMargins((int) (2 * dp), (int) (2 * dp), (int) (2 * dp), (int) (2 * dp));
+            row.addView(v, tlp);
             lookTiles.add(v);
         }
+        for (int i = count; i % perRow != 0; i++) row.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+
+        switchPref(Prefs.CURSOR_MIRROR, "Mirror (flip left to right)", false);
+        switchPref(Prefs.CURSOR_INVERT, "Invert colours (swap fill and outline)", false);
 
         colorRow = new LinearLayout(this);
         colorRow.setOrientation(LinearLayout.VERTICAL);
@@ -296,7 +326,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         root.addView(customBox);
         LinearLayout outer = root;
         root = customBox;
-        button("Choose another image", x -> pickImage());
+        button("Choose another picture", x -> pickImage());
         TextView hl = text("Click point");
         hl.setPadding(0, (int) (8 * dp), 0, 0);
         hotspotGroup = new RadioGroup(this);
@@ -313,30 +343,29 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         hotspotGroup.setOnCheckedChangeListener((g, id) -> prefs.edit().putString(Prefs.CURSOR_HOTSPOT,
                 id == rC.getId() ? PointerShape.HOT_CENTER : PointerShape.HOT_TOP_LEFT).apply());
         root.addView(hotspotGroup);
-        hint("Any PNG, JPG, WebP or GIF picture; transparent PNGs look best. The size slider below scales it.");
+        hint("Any PNG, JPG, WebP or GIF picture; transparent PNGs look best. With Mirror the click point flips too.");
         root = outer;
 
         seekPref(Prefs.CURSOR_SIZE, "Pointer size", 6, 30, 10, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
-        seekPref(Prefs.AUTOHIDE_S, "Hide pointer when idle", 0, 30, 5, 1, v -> v == 0 ? "never" : v + " s");
 
-        section("Movement");
-        seekPref(Prefs.SENS, "Speed", Prefs.SENS_MIN, Prefs.SENS_MAX, Prefs.SENS_DEFAULT, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
-        seekPref(Prefs.ACCEL, "Acceleration", 0, 40, 10, 1, v -> String.format(Locale.US, "%.1f", v / 10f));
-        seekPref(Prefs.YSPEED, "Vertical speed", 3, 40, 10, 1, v -> String.format(Locale.US, "%.1f×", v / 10f));
-
-        section("Direction");
-        switchPref(Prefs.SWAP, "Swap X and Y", false);
-        switchPref(Prefs.INV_X, "Invert horizontal", false);
-        switchPref(Prefs.INV_Y, "Invert vertical", false);
-
-        customImage = PointerShape.loadCustom(this);
         updateLook();
+        // Show the chosen cursor's row in the box.
+        lookBox.post(() -> {
+            for (LookView v : lookTiles) {
+                if (v.isSelected()) {
+                    lookBox.scrollTo(0, Math.max(0, ((View) v.getParent()).getTop() - (int) (4 * dp)));
+                    break;
+                }
+            }
+        });
     }
 
     // ---------------------------------------------------------------- pointer look
 
     private static final int PICK_IMAGE = 42;
     private LookView lookPreview;
+    private ScrollView lookBox;
+    private TextView lookName;
     private final List<LookView> lookTiles = new ArrayList<>();
     private final List<Swatch> swatches = new ArrayList<>();
     private LinearLayout colorRow, customBox;
@@ -355,14 +384,17 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         boolean custom = PointerShape.CUSTOM.equals(style);
         int color = prefs.getInt(Prefs.CURSOR_COLOR, PointerShape.DEFAULT_COLOR);
         boolean centered = PointerShape.HOT_CENTER.equals(prefs.getString(Prefs.CURSOR_HOTSPOT, PointerShape.HOT_TOP_LEFT));
+        boolean mirror = prefs.getBoolean(Prefs.CURSOR_MIRROR, false);
+        boolean invert = prefs.getBoolean(Prefs.CURSOR_INVERT, false);
         lookPreview.style = style;
-        lookPreview.update(color, prefs.getInt(Prefs.CURSOR_SIZE, 10) / 10f, centered);
+        lookPreview.update(color, prefs.getInt(Prefs.CURSOR_SIZE, 10) / 10f, centered, mirror, invert);
+        RetroCursors.Glyph g = RetroCursors.find(style);
+        lookName.setText(custom ? "Your picture" : g.label);
         for (LookView v : lookTiles) {
-            v.update(color, 1f, centered);
+            v.update(color, 1f, centered, mirror, invert);
             boolean sel = v.style.equals(style);
-            View tile = (View) v.getParent();
-            tile.setBackground(sel ? selectedBackground() : null);
-            tile.setSelected(sel);
+            v.setBackground(sel ? selectedBackground() : null);
+            v.setSelected(sel);
         }
         for (Swatch s : swatches) s.setChosen(s.color == color);
         colorRow.setVisibility(custom ? View.GONE : View.VISIBLE);
@@ -460,10 +492,9 @@ public final class MainActivity extends Activity implements PadLink.Listener {
             plus.setColor(0x8A808080);
         }
 
-        void update(int color, float scale, boolean centered) {
+        void update(int color, float scale, boolean centered, boolean mirror, boolean invert) {
             boolean custom = PointerShape.CUSTOM.equals(style);
-            shape.set(style, color, scale,
-                    custom ? customImage : null, centered);
+            shape.set(style, color, scale, custom ? customImage : null, centered, mirror, invert);
             invalidate();
         }
 

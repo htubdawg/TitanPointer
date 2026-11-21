@@ -40,6 +40,8 @@ public final class Prefs {
     /** Pointer look: a {@link PointerShape} style, its fill colour, and the custom image's click point. */
     public static final String CURSOR_STYLE = "cursor_look", CURSOR_COLOR = "cursor_tint",
             CURSOR_HOTSPOT = "cursor_hotspot";
+    /** Pointer flipped left to right; fill and outline colours swapped (custom image: colours inverted). */
+    public static final String CURSOR_MIRROR = "cursor_mirror", CURSOR_INVERT = "cursor_invert";
     /** Bumped whenever a new custom pointer image is saved, so the service reloads it. */
     public static final String CURSOR_IMAGE_VER = "cursor_image_ver";
     public static final String ENABLED = "enabled"; // pointer mode on/off

@@ -53,7 +53,7 @@ final class PointerShape {
         ring.setStyle(Paint.Style.STROKE);
         sharp.setFilterBitmap(false);
         sharp.setAntiAlias(false);
-        set(DEFAULT, DEFAULT_COLOR, 1f, null, false);
+        set(DEFAULT, DEFAULT_COLOR, 1f, null, false, false, false);
     }
 
     /** Reads the look from the settings (and the custom image file, if that's the style). */
@@ -61,7 +61,8 @@ final class PointerShape {
         String s = p.getString(Prefs.CURSOR_STYLE, DEFAULT);
         Bitmap b = CUSTOM.equals(s) ? loadCustom(c) : null;
         set(s, p.getInt(Prefs.CURSOR_COLOR, DEFAULT_COLOR), p.getInt(Prefs.CURSOR_SIZE, 10) / 10f, b,
-                HOT_CENTER.equals(p.getString(Prefs.CURSOR_HOTSPOT, HOT_TOP_LEFT)));
+                HOT_CENTER.equals(p.getString(Prefs.CURSOR_HOTSPOT, HOT_TOP_LEFT)),
+                p.getBoolean(Prefs.CURSOR_MIRROR, false), p.getBoolean(Prefs.CURSOR_INVERT, false));
     }
 
     static Bitmap loadCustom(Context c) {
@@ -69,24 +70,34 @@ final class PointerShape {
         return f.exists() ? BitmapFactory.decodeFile(f.getPath()) : null;
     }
 
-    /** {@code custom} and {@code customCentered} only matter for the custom style; a missing image or unknown
-     *  style falls back to the default glyph. */
-    void set(String style, int color, float scale, Bitmap custom, boolean customCentered) {
+    /**
+     * {@code custom} and {@code customCentered} only matter for the custom style; a missing image or unknown
+     * style falls back to the default glyph. {@code mirror} flips it left to right (hotspot too); {@code invert}
+     * swaps a glyph's fill and outline colours, or inverts a custom image's colours.
+     */
+    void set(String style, int color, float scale, Bitmap custom, boolean customCentered, boolean mirror,
+            boolean invert) {
         this.scale = scale;
         RetroCursors.Glyph g = RetroCursors.find(style);
         if (CUSTOM.equals(style) && custom != null) {
             this.style = CUSTOM;
-            image = custom;
+            image = invert ? invertColors(custom) : custom;
             pixelArt = false;
             hotFracX = customCentered ? custom.getWidth() / 2f : 0;
             hotFracY = customCentered ? custom.getHeight() / 2f : 0;
         } else {
             if (g == null) g = RetroCursors.find(DEFAULT);
             this.style = g.id;
-            image = render(g, color);
+            image = render(g, color, invert);
             pixelArt = true;
             hotFracX = g.hotX + 0.5f; // the middle of the hotspot pixel
             hotFracY = g.hotY + 0.5f;
+        }
+        if (mirror) {
+            android.graphics.Matrix flip = new android.graphics.Matrix();
+            flip.setScale(-1, 1);
+            image = Bitmap.createBitmap(image, 0, 0, image.getWidth(), image.getHeight(), flip, false);
+            hotFracX = image.getWidth() - hotFracX;
         }
         layout();
     }
@@ -95,8 +106,13 @@ final class PointerShape {
         return style;
     }
 
-    private static Bitmap render(RetroCursors.Glyph g, int color) {
+    private static Bitmap render(RetroCursors.Glyph g, int color, boolean invert) {
         int outline = isLight(color) ? Color.BLACK : Color.WHITE;
+        if (invert) {
+            int t = color;
+            color = outline;
+            outline = t;
+        }
         Bitmap b = Bitmap.createBitmap(g.width(), g.height(), Bitmap.Config.ARGB_8888);
         for (int y = 0; y < g.height(); y++) {
             String r = g.rows[y];
@@ -106,6 +122,15 @@ final class PointerShape {
             }
         }
         return b;
+    }
+
+    /** The same picture with red, green and blue inverted (transparency kept). */
+    private static Bitmap invertColors(Bitmap src) {
+        int w = src.getWidth(), h = src.getHeight();
+        int[] px = new int[w * h];
+        src.getPixels(px, 0, w, 0, 0, w, h);
+        for (int i = 0; i < px.length; i++) px[i] = (px[i] & 0xFF000000) | (~px[i] & 0x00FFFFFF);
+        return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888);
     }
 
     private void layout() {
@@ -124,7 +149,9 @@ final class PointerShape {
         h = ih + 2 * m;
         hotX = m + hotFracX * k;
         hotY = m + hotFracY * k;
-        ringOnTop = hotFracX > 3 && hotFracY > 3; // hotspot inside the picture, not at its tip
+        // Hotspot well inside the picture (not at a tip or edge): draw the click ring on top, small.
+        int iwPx = image.getWidth(), ihPx = image.getHeight();
+        ringOnTop = Math.min(hotFracX, iwPx - hotFracX) > 3 && Math.min(hotFracY, ihPx - hotFracY) > 3;
         ring.setStrokeWidth(2f * density);
     }
 

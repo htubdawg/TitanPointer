@@ -31,6 +31,10 @@
   .seek .step span { width: 40px; height: 36px; background: #d6d7d7; border-radius: 2px; font-size: 20px; line-height: 36px;
                      text-align: center; color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 1px 1px rgba(0,0,0,.12); }
   .seek .ctl .track { flex: 1; }
+  .lookbox { height: 200px; overflow: hidden; border: 1px solid rgba(128,128,128,.38); border-radius: 6px; padding: 4px; }
+  .lrow { display: flex; }
+  .ltile { flex: 1; margin: 2px; height: 52px; border: 2px solid transparent; border-radius: 6px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+  .ltile.on { border-color: var(--accent); }
   .tiles { display: flex; gap: 4px; padding-top: 8px; }
   .tile { flex: 1; text-align: center; font-size: 12px; color: var(--text-secondary); padding: 4px 0; border: 2px solid transparent; border-radius: 6px; }
   .tile.on { border-color: var(--accent); }
@@ -81,7 +85,7 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M2 22h20V2z"/></svg>
     <svg width="9" height="14" viewBox="0 0 10 16" fill="#fff"><rect x="3" y="0" width="4" height="2"/><rect x="0" y="2" width="10" height="14" rx="1"/></svg>
   </span></div>
-  <div class="bar"><div>TitanPointer</div><div class="sub">Version 1.28</div></div>
+  <div class="bar"><div>TitanPointer</div><div class="sub">Version 1.29</div></div>
   <div class="tabs" id="tabs"></div>
   <div class="scroll" id="scroll"><div class="content" id="content"></div></div>
 </div>
@@ -132,6 +136,15 @@
       hint('The Titan reports keyboard touches only to the app that has keyboard focus, so while pointer mode is on, TitanPointer holds the focus. Keys can’t reach the app underneath until you turn it off. The Titan’s scroll assistant has to stay on: without it no keyboard touches reach apps at all.');
     },
     () => {
+      section('Movement');
+      seek('Speed', 1, 20, 7, x);
+      seek('Acceleration', 0, 40, 10, (v) => (v / 10).toFixed(1));
+      seek('Vertical speed', 3, 40, 10, x);
+      seek('Hide pointer when idle', 0, 30, 5, (v) => v === 0 ? 'never' : v + ' s');
+      section('Direction');
+      sw('Swap X and Y', false);
+      sw('Invert horizontal', false);
+      sw('Invert vertical', false);
       section('Pointer look');
       const G = window.GLYPHS || [];
       const arrow = G.find((g) => g.id === 'left_ptr');
@@ -139,30 +152,26 @@
         c.fillStyle = '#F2F2F2'; c.fillRect(0, 0, 224, 72); c.fillStyle = '#303030'; c.fillRect(224, 0, 224, 72);
         if (arrow) for (const cx of [112, 336]) { c.save(); c.translate(Math.round((cx - (arrow.rows[0].length * 5 / 3 + 6) / 2) * 3) / 3, Math.round((36 - (arrow.rows.length * 5 / 3 + 6) / 2) * 3) / 3); drawGlyph(c, arrow, '#000000', 5 / 3); c.restore(); }
       });
-      hint('Classic cursors from the X Window System (the original Unix/Linux pointer font), or your own picture.');
-      const items = G.map((g) => [g, g.label]).concat([[null, 'Custom']]);
-      for (let i = 0; i < items.length; i += 6) {
-        add(`<div class="tiles">${items.slice(i, i + 6).map(([g, n], j) => `<div class="tile ${i + j === 0 ? 'on' : ''}"><canvas data-i="${i + j}" width="210" height="132" style="width:70px;height:44px"></canvas><div>${n}</div></div>`).join('')}</div>`);
+      add('<div class="text" style="text-align:center">Arrow</div>');
+      hint(`All ${G.length} cursors of the X Window System’s cursor font (the original Unix/Linux pointers), or your own picture at the end. Scroll the box to see them all.`);
+      const items = G.concat([null]);
+      let html = '<div class="lookbox">';
+      for (let i = 0; i < items.length; i += 7) {
+        html += '<div class="lrow">' + items.slice(i, i + 7).map((g, j) => `<div class="ltile ${i + j === 0 ? 'on' : ''}"><canvas data-i="${i + j}" width="171" height="156" style="width:57px;height:52px"></canvas></div>`).join('') + '</div>';
       }
+      add(html + '</div>');
       document.querySelectorAll('canvas[data-i]').forEach((cv) => {
-        const c = cv.getContext('2d'); c.scale(3, 3); c.imageSmoothingEnabled = false;
-        const g = items[+cv.dataset.i][0];
-        if (!g) { c.fillStyle = 'rgba(128,128,128,.54)'; c.font = '28px Roboto'; c.textAlign = 'center'; c.fillText('+', 35, 32); return; }
-        const k = 5 / 3, gw = g.rows[0].length * k + 6, gh = g.rows.length * k + 6;
-        c.translate(Math.round((35 - gw / 2) * 3) / 3, Math.round((22 - gh / 2) * 3) / 3); drawGlyph(c, g, '#000000', k);
+        const c = cv.getContext('2d'); c.scale(3, 3);
+        const g = items[+cv.dataset.i];
+        if (!g) { c.fillStyle = 'rgba(128,128,128,.54)'; c.font = '28px Roboto'; c.textAlign = 'center'; c.fillText('+', 28.5, 36); return; }
+        let k = 5 / 3, gw = g.rows[0].length * k + 6, gh = g.rows.length * k + 6;
+        const fit = Math.min(1, 52 / gh); c.translate(Math.round((28.5 - gw * fit / 2) * 3) / 3, Math.round((26 - gh * fit / 2) * 3) / 3); c.scale(fit, fit); drawGlyph(c, g, '#000000', k);
       });
+      sw('Mirror (flip left to right)', false);
+      sw('Invert colours (swap fill and outline)', false);
       text('Colour');
       add(`<div class="swatches">${['#000000', '#FFFFFF', '#FFEB3B', '#FF9800', '#F44336', '#E91E63', '#4CAF50', '#2196F3'].map((c, i) => `<span><i class="${i ? '' : 'on'}" style="background:${c}"></i></span>`).join('')}</div>`);
       seek('Pointer size', 6, 30, 10, x);
-      seek('Hide pointer when idle', 0, 30, 5, (v) => v === 0 ? 'never' : v + ' s');
-      section('Movement');
-      seek('Speed', 1, 20, 7, x);
-      seek('Acceleration', 0, 40, 10, (v) => (v / 10).toFixed(1));
-      seek('Vertical speed', 3, 40, 10, x);
-      section('Direction');
-      sw('Swap X and Y', false);
-      sw('Invert horizontal', false);
-      sw('Invert vertical', false);
     },
     () => {
       section('Clicking');
@@ -207,7 +216,7 @@
     },
     () => {
       section('TitanPointer');
-      text('Version 1.28 (build 29)');
+      text('Version 1.29 (build 30)');
       hint('Turns the original Unihertz Titan’s touch-sensitive keyboard into a touchpad with an on-screen pointer. Nothing is collected or sent anywhere.');
       section('Source code and updates');
       text('https://github.com/htubdawg/TitanPointer');
