@@ -85,7 +85,7 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M2 22h20V2z"/></svg>
     <svg width="9" height="14" viewBox="0 0 10 16" fill="#fff"><rect x="3" y="0" width="4" height="2"/><rect x="0" y="2" width="10" height="14" rx="1"/></svg>
   </span></div>
-  <div class="bar"><div>TitanPointer</div><div class="sub">Version 1.30</div></div>
+  <div class="bar"><div>TitanPointer</div><div class="sub">Version 1.31</div></div>
   <div class="tabs" id="tabs"></div>
   <div class="scroll" id="scroll"><div class="content" id="content"></div></div>
 </div>
@@ -177,6 +177,10 @@
       section('Joystick mode');
       sw('Joystick mode', false);
       hint('Splits the keyboard into thirds. Middle: a joystick. Touch, then hold your finger away from where it landed; the further away, the faster the pointer moves (your finger may leave the middle). Left: tap to click, tap twice to hold a drag (steer with the stick, tap either side to let go). Right: tap to long press. Taps in the middle do nothing. In scroll mode (Space) the stick scrolls.');
+      sw('Floating centre (where your finger lands)', true);
+      hint('Off: the centre is fixed in the middle of the stick area, so where you touch already sets the direction and speed.');
+      sw('Stick on the spacebar only', false);
+      hint('The stick only starts on the spacebar; other touches in the middle do nothing. The click zones stay at the sides. Pressing Space down still switches scroll mode.');
       seek('Click zone width (each side)', 15, 45, 33, (v) => v + '% of the keyboard');
       seek('Stick dead zone', 0, 60, 15, (v) => v === 0 ? 'none' : '≈ ' + (v / 1000 * 78).toFixed(1) + ' mm');
       seek('Distance for top speed', 4, 25, 10, (v) => '≈ ' + (v / 100 * 78).toFixed(0) + ' mm');
@@ -225,7 +229,7 @@
     },
     () => {
       section('TitanPointer');
-      text('Version 1.30 (build 31)');
+      text('Version 1.31 (build 32)');
       hint('Turns the original Unihertz Titan’s touch-sensitive keyboard into a touchpad with an on-screen pointer. Nothing is collected or sent anywhere.');
       section('Source code and updates');
       text('https://github.com/htubdawg/TitanPointer');

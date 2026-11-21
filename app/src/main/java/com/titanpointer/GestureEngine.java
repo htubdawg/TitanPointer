@@ -96,7 +96,18 @@ public final class GestureEngine implements TouchTracker.Listener {
         public float joyCurve = 2.0f;
         /** A touch on a click zone held longer than this isn't a tap. */
         public long joyClickMaxMs = 500;
+        /** The stick's centre is where the finger lands; otherwise the middle of the stick zone. */
+        public boolean joyFloating = true;
+        /** The stick only starts on the spacebar; other touches in the middle do nothing. */
+        public boolean joySpacebar = false;
     }
+
+    /**
+     * The spacebar on the raw pad (fractions of the device's X and Y ranges, Y = 0 at the top row). Estimated
+     * from a photo (docs/titan-hardware.md): bottom row Z X C V · Space · B N M · Enter on a 10-key grid, so Space
+     * is the 5th and 6th key widths; the letter rows share the 78% below the top row.
+     */
+    static final float SPACE_X0 = 0.40f, SPACE_X1 = 0.60f, SPACE_Y0 = 0.74f, SPACE_Y1 = 1.0f;
 
     /** Joystick timer interval. */
     static final long JOY_TICK_MS = 16;
@@ -145,7 +156,7 @@ public final class GestureEngine implements TouchTracker.Listener {
 
     // Joystick mode state.
     private int joyZone = ZONE_NONE;
-    private float[] joyCenter, joyPos;
+    private float[] joyCenter, joyPos, joyStart;
     private boolean joyMoved;
     private boolean dragLock = false;
     private long lastTick;
@@ -385,7 +396,7 @@ public final class GestureEngine implements TouchTracker.Listener {
         if (!touching) joyBegin(now, c, p);
         trackedId = c.id;
         joyPos = p;
-        if (joyCenter != null && Math.hypot(p[0] - joyCenter[0], p[1] - joyCenter[1]) > cfg.tapSlop) joyMoved = true;
+        if (joyStart != null && Math.hypot(p[0] - joyStart[0], p[1] - joyStart[1]) > cfg.tapSlop) joyMoved = true;
         lastFrameTime = now;
     }
 
@@ -397,6 +408,7 @@ public final class GestureEngine implements TouchTracker.Listener {
         keyDuringTouch = now - lastKeyTime < cfg.typingSuppressMs;
         scrollActive = false;
         joyMoved = false;
+        joyStart = p;
         joyCenter = p;
         joyPos = p;
         dragCandidate = false;
@@ -407,8 +419,14 @@ public final class GestureEngine implements TouchTracker.Listener {
             return;
         }
         float u = p[0];
-        joyZone = u < cfg.joyClickZone ? ZONE_LEFT : (u > 1f - cfg.joyClickZone ? ZONE_RIGHT : ZONE_MID);
+        float rx = (c.x - cfg.xMin) / (float) Math.max(1, cfg.xMax - cfg.xMin);
+        float ry = (c.y - cfg.yMin) / yRange;
+        if (cfg.joySpacebar && onSpacebar(rx, ry)) joyZone = ZONE_MID;
+        else if (u < cfg.joyClickZone) joyZone = ZONE_LEFT;
+        else if (u > 1f - cfg.joyClickZone) joyZone = ZONE_RIGHT;
+        else joyZone = cfg.joySpacebar ? ZONE_NONE : ZONE_MID; // spacebar only: the rest of the middle does nothing
         if (joyZone == ZONE_MID) {
+            if (!cfg.joyFloating) joyCenter = fixedCenter();
             // A click still waiting for a possible second tap goes out now, where the pointer is, before it moves.
             if (clickPending) {
                 cancelPendingClick();
@@ -452,6 +470,26 @@ public final class GestureEngine implements TouchTracker.Listener {
         }
         ticking = true;
         scheduler.post(joyTick, JOY_TICK_MS);
+    }
+
+    static boolean onSpacebar(float rx, float ry) {
+        return rx >= SPACE_X0 && rx <= SPACE_X1 && ry >= SPACE_Y0 && ry <= SPACE_Y1;
+    }
+
+    /** The fixed stick centre: the middle of the spacebar, or of the middle zone below the ignored top row. */
+    float[] fixedCenter() {
+        float fx, fy;
+        if (cfg.joySpacebar) {
+            fx = (SPACE_X0 + SPACE_X1) / 2f;
+            fy = (SPACE_Y0 + SPACE_Y1) / 2f;
+        } else {
+            fx = 0.5f;
+            fy = cfg.ignoreTopFrac + (1f - cfg.ignoreTopFrac) / 2f;
+        }
+        int x = Math.round(cfg.xMin + fx * (cfg.xMax - cfg.xMin));
+        int y = Math.round(cfg.yMin + fy * (cfg.yMax - cfg.yMin));
+        float[] c = normalize(x, y);
+        return c != null ? c : joyStart;
     }
 
     /** Pointer speed in px/s for a stick deflection of {@code d} pad widths from the centre. */

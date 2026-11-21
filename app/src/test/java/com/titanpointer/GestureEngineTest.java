@@ -476,4 +476,45 @@ public class GestureEngineTest {
         advance(500);
         assertTrue(log.isEmpty());
     }
+
+    @Test
+    public void joystickFixedCentreMovesFromWhereYouLand() {
+        joystick();
+        engine.getConfig().joyFloating = false; // centre: x 500, y 200 (no top row ignored)
+        frame(0, 1, 600, 200);                  // land 0.1 pad widths right of it: full speed at once
+        hold(1000);
+        assertTrue("moved " + moveX, moveX > 900 && moveX < 1100);
+        frame(0, -1, 0, 0);
+    }
+
+    @Test
+    public void joystickSpacebarOnly() {
+        joystick();
+        engine.getConfig().joySpacebar = true; // spacebar: x 400..600, y >= 296 of 400
+        frame(0, 1, 500, 150);                  // middle, above the spacebar: nothing
+        advance(16); frame(0, 1, 600, 150);
+        hold(300); frame(0, -1, 0, 0);
+        assertEquals(0f, moveX, 0.01f);
+        frame(0, 1, 500, 340);                  // on the spacebar: the stick
+        advance(16); frame(0, 1, 600, 340);
+        hold(300); frame(0, -1, 0, 0);
+        assertTrue(moveX > 200);
+        frame(0, 1, 100, 200);                  // click zones still work
+        advance(60); frame(0, -1, 0, 0);
+        advance(300);
+        assertEquals(List.of("move", "click"), log);
+    }
+
+    @Test
+    public void joystickSpacebarFixedCentre() {
+        joystick();
+        GestureEngine.Config c = engine.getConfig();
+        c.joySpacebar = true;
+        c.joyFloating = false;                  // centre: x 500, y 348
+        frame(0, 1, 450, 348);                  // 0.05 left of it
+        hold(500);
+        frame(0, -1, 0, 0);
+        assertTrue("moved " + moveX, moveX < -100);
+        assertEquals(0f, moveY, 1f);
+    }
 }

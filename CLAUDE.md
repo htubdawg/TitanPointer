@@ -385,6 +385,14 @@ ACTION_LONG_CLICK on the first long-clickable standard View, like element click)
 tapSlop movement, ≤ 500 ms. Touchpad-only settings (speed, accel, tap to click, tap-drag) don't apply. Unit tested. Not
 yet tried on the phone. Drags on standard Views still hit the Titan block (as tap-drag does).
 
+## v1.31
+Joystick toggles: **Floating centre** (`Prefs.JOY_FLOAT`, default on; off = fixed centre `GestureEngine.fixedCenter()`:
+middle of the pad below the ignored top row, or the spacebar's middle). **Stick on the spacebar only**
+(`Prefs.JOY_SPACEBAR`, default off): the stick starts only on the spacebar (`SPACE_X0..X1` 40–60% of raw X, `SPACE_Y0` 74%+
+of raw Y: estimated from the photo's 10-key grid, unconfirmed), checked before the click zones; other middle touches do
+nothing; click zones unchanged. Pressing Space still toggles scroll mode (a press is also a key, which stops that touch's
+stick). Tap detection uses the landing point (`joyStart`), not the centre. Not yet tried on the phone.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

@@ -39,6 +39,8 @@ public final class Prefs {
      *  top speed (tenths of a screen width per second), response curve (tenths). */
     public static final String JOY_ZONE = "joy_zone", JOY_DEAD = "joy_dead", JOY_REACH = "joy_reach",
             JOY_SPEED = "joy_speed", JOY_CURVE = "joy_curve";
+    /** Joystick: centre where the finger lands (default on); stick only on the spacebar (default off). */
+    public static final String JOY_FLOAT = "joy_float", JOY_SPACEBAR = "joy_spacebar";
     public static final int JOY_ZONE_DEFAULT = 33, JOY_DEAD_DEFAULT = 15, JOY_REACH_DEFAULT = 10,
             JOY_SPEED_DEFAULT = 12, JOY_CURVE_DEFAULT = 20;
     /** Speed slider: 0.1x to 2.0x. */
@@ -134,6 +136,8 @@ public final class Prefs {
         g.joyReach = Math.max(g.joyDeadZone + 0.01f, p.getInt(JOY_REACH, JOY_REACH_DEFAULT) / 100f);
         g.joyMaxSpeed = p.getInt(JOY_SPEED, JOY_SPEED_DEFAULT) / 10f;
         g.joyCurve = p.getInt(JOY_CURVE, JOY_CURVE_DEFAULT) / 10f;
+        g.joyFloating = p.getBoolean(JOY_FLOAT, true);
+        g.joySpacebar = p.getBoolean(JOY_SPACEBAR, false);
         return g;
     }
 }

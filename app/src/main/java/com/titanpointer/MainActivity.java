@@ -575,6 +575,12 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 + "landed; the further away, the faster the pointer moves (your finger may leave the middle). Left: "
                 + "tap to click, tap twice to hold a drag (steer with the stick, tap either side to let go). Right: "
                 + "tap to long press. Taps in the middle do nothing. In scroll mode (Space) the stick scrolls.");
+        switchPref(Prefs.JOY_FLOAT, "Floating centre (where your finger lands)", true);
+        hint("Off: the centre is fixed in the middle of the stick area, so where you touch already sets the "
+                + "direction and speed.");
+        switchPref(Prefs.JOY_SPACEBAR, "Stick on the spacebar only", false);
+        hint("The stick only starts on the spacebar; other touches in the middle do nothing. The click zones "
+                + "stay at the sides. Pressing Space down still switches scroll mode.");
         seekPref(Prefs.JOY_ZONE, "Click zone width (each side)", 15, 45, Prefs.JOY_ZONE_DEFAULT, 1,
                 v -> v + "% of the keyboard");
         seekPref(Prefs.JOY_DEAD, "Stick dead zone", 0, 60, Prefs.JOY_DEAD_DEFAULT, 1,
