@@ -7,12 +7,13 @@ touchpad with an on-screen mouse pointer. No root needed.
 > directed and tested by a human on a real Titan. Review it before you trust it with anything important.
 
 <p>
-  <img src="docs/images/settings-1.png" width="32%" alt="Settings: service status, pointer mode switch, how it works">
-  <img src="docs/images/settings-2.png" width="32%" alt="Settings: pointer speed, acceleration, size">
-  <img src="docs/images/settings-3.png" width="32%" alt="Settings: click, long-press and toggle keys">
+  <img src="docs/images/settings-1.png" width="24%" alt="Settings: service status, pointer mode switch, how it works">
+  <img src="docs/images/settings-2.png" width="24%" alt="Settings: pointer speed, acceleration, size">
+  <img src="docs/images/settings-3.png" width="24%" alt="Settings: clicking, including clicking standard buttons directly">
+  <img src="docs/images/settings-4.png" width="24%" alt="Settings: click, long-press and toggle keys">
 </p>
 
-<sub>The settings screen (1.22) at the Titan's 1440 × 1440 resolution, with default settings. These are renderings of
+<sub>The settings screen (1.24) at the Titan's 1440 × 1440 resolution, with default settings. These are renderings of
 the app's layout (<code>docs/screenshots/</code>, made with <code>node docs/screenshots/render.js</code>), not
 captures from a phone.</sub>
 
@@ -45,32 +46,50 @@ captures from a phone.</sub>
 
 Hardware details (keyboard layout, sensor range, key codes): [docs/titan-hardware.md](docs/titan-hardware.md).
 
-## Known limitation: keyboard taps can't click standard Android buttons
+## Keyboard taps on standard Android buttons
 
-On the Titan, a tap on the keyboard surface doesn't click classic Android buttons and toolbars, including
-the address bars and toolbar buttons of Firefox and Chrome. **Use the click key (Enter) for those.** It
-works everywhere. Keyboard taps work on web pages and in apps built with Jetpack Compose.
+On the Titan, a fake tap right after a keyboard touch doesn't click classic Android buttons and toolbars,
+including the address bars and toolbar buttons of Firefox and Chrome. Since 1.24, **Click standard buttons
+directly** (under Clicking, on by default) works around it: while the phone is blocking taps, a tap on the
+keyboard clicks the standard button under the pointer through accessibility (for text fields: focus and
+click) instead of sending a fake touch. Web pages and Jetpack Compose screens accept fake taps, so they
+still get a normal tap. The click key (Enter) also works everywhere. Not yet confirmed on the phone.
 
-This is the Titan's own software, not TitanPointer. Its keyboard scrolling feature (the scroll assistant,
-which TitanPointer needs left on) sets the system property `debug.sf.forcescroll_view` to `yes` whenever the
-keyboard surface is touched, and only a real key press sets it back to `no`. While it's `yes`, the Titan's
-modified `View.onTouchEvent` refuses taps on standard views, so that keyboard scrolling doesn't press
-buttons. You can see it without TitanPointer: scroll a page in Firefox with the keyboard, then tap the
-address bar with your finger.
+### Why
 
-Apps can't inject key presses or change `debug.*` properties, so this can't be fixed without root. An ADB
-shell could reset the property before each click; that isn't implemented. The full investigation is in
-[CLAUDE.md](CLAUDE.md).
+This is the Titan's own software, not TitanPointer. Its input reader (`libinputreader.so`,
+`InputReader::processEventsForDeviceLocked`) sets the system property `debug.sf.forcescroll_view` to `yes` on
+every event from the keyboard touch sensor and to `no` on events from any other hardware device (a key, the
+touchscreen). While it's `yes`, the Titan's modified `View.onTouchEvent` refuses touches on standard views, so
+that keyboard scrolling doesn't press buttons. Fake taps from apps (and even ADB's `input` command) enter
+Android after the input reader, so they never reset it: every tap TitanPointer sends after a keyboard tap is
+refused by standard views. Only root or `adb shell setprop` can reset the property.
+
+## Titan scroll assistant setting (optional, needs a one-time ADB command)
+
+The collapsed **Titan scroll assistant** section has **Turn the scroll assistant off when pointer mode is off**
+(off by default): the keyboard then only scrolls pages while you're using the pointer, and pointer mode turns
+it back on (the pointer needs it). To allow it, run this once from a computer after installing:
+
+```sh
+adb shell pm grant com.titanpointer android.permission.WRITE_SECURE_SETTINGS
+```
+
+The scroll assistant is Settings.Global `touchpad_switch_value` (1 on, 0 off); the phone copies it into
+`persist.sys.touchpad_switch`.
 
 ## Install
 
-1. Install [`dist/TitanPointer-1.22.apk`](dist/TitanPointer-1.22.apk).
+1. Install the APK from the [latest release](https://github.com/htubdawg/titanpointer/releases/latest)
+   (or [`dist/TitanPointer-1.24.apk`](dist/TitanPointer-1.24.apk) in this repository).
 2. Open **TitanPointer** and turn on its accessibility service (Settings → Accessibility → TitanPointer).
    It draws the pointer, sends taps and swipes at the pointer, and reads key presses for the shortcuts.
    Nothing is collected or sent anywhere.
 3. Keep the Titan's keyboard scrolling (scroll assistant) turned on: without it the keyboard touches don't
    reach TitanPointer.
 4. Press **Alt + Space** and slide on the keyboard.
+5. Optional: to have the keyboard stop scrolling pages while pointer mode is off, run the `pm grant`
+   command [above](#titan-scroll-assistant-setting-optional-needs-a-one-time-adb-command) once.
 
 The app shows a minimal, silent notification while the service runs. It keeps Android from stopping the
 service when you swipe the app away; you can hide it in the notification settings.
@@ -121,6 +140,10 @@ helper).
 native/build.sh              # rebuild the helper into app/src/main/jniLibs/arm64-v8a/libtitanpad.so
 ```
 
+**Releases:** after bumping `versionName` in `app/build.gradle` and merging to `main`, run the **Release**
+workflow (Actions → Release → Run workflow, optionally with release notes). It runs the unit tests, builds the
+APK and publishes it as release `v<versionName>` ("Version <versionName>"), and stops if that release exists.
+
 Builds are signed with `signing/titanpointer.keystore`, a throwaway key kept in the repo so every build
 can update an installed copy. Use your own key if you distribute it.
 
@@ -132,6 +155,8 @@ app/src/main/java/com/titanpointer/
   GestureEngine      single-finger touchpad gestures (unit tested)
   GestureInjector    taps, long presses and continued strokes via dispatchGesture()
   MainActivity       setup and settings screen
+  ElementClick       clicks the standard View under the pointer while the Titan blocks fake taps
+  ScrollAssist       switches the Titan's scroll assistant (needs WRITE_SECURE_SETTINGS via ADB)
   Diag               in-app diagnostics log (off by default)
   ClickTrace         per-click diagnostics: timing, what's under the pointer, the app's response
   TapTestActivity, StateProbe, FrameworkScan   tools used to find the Titan's tap block

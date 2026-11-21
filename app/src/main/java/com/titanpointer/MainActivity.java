@@ -44,7 +44,9 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
     private TextView accessibilityStatus, linkStatus, deviceText, adbCommand;
     private Button accessibilityButton;
-    private Switch enabledSwitch, grabSwitch, zoneSwitch;
+    private Switch enabledSwitch, grabSwitch, zoneSwitch, followSwitch;
+    private TextView assistStatus;
+    private View assistGrantBox;
     private View adbBox;
     private LinearLayout noRootBox, rootBox;
     private TextView helperNote;
@@ -82,11 +84,25 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         link.setOpen(OWNER, prefs.getString(Prefs.DEVICE, null) != null
                 && !Prefs.MODE_NOROOT.equals(prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT)));
         refresh();
+        ui.postDelayed(grantWatch, 1000);
     }
+
+    /** The permission is granted from a computer while the app may be open: notice it without a restart. */
+    private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean lastGranted;
+    private final Runnable grantWatch = new Runnable() {
+        @Override
+        public void run() {
+            boolean g = ScrollAssist.canWrite(MainActivity.this);
+            if (g != lastGranted) refresh();
+            ui.postDelayed(this, 1000);
+        }
+    };
 
     @Override
     protected void onPause() {
         super.onPause();
+        ui.removeCallbacks(grantWatch);
         link.setOpen(OWNER, false);
         link.removeListener(this);
         if (calibrateButton != null && testPad != null) finishCalibration(false);
@@ -145,6 +161,10 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 v -> v == 0 ? "off" : v + "% of the keyboard");
         hint("The top row (Shift, Recents, the home key, Back, Alt) is part of the touch surface. Touches that "
                 + "start there don't move the pointer or click; a slide that starts lower can still run into it.");
+        switchPref(Prefs.ELEMENT_CLICK, "Click standard buttons directly", true);
+        hint("After a keyboard touch the Titan refuses taps on ordinary Android buttons (toolbars, address bars) "
+                + "until a key is pressed. While it does, a tap on the keyboard clicks the button under the pointer "
+                + "through accessibility instead. Web pages and newer app screens still get a normal tap.");
 
         // --- Scrolling
         section("Scrolling (Space turns scroll mode on/off)");
@@ -171,6 +191,39 @@ public final class MainActivity extends Activity implements PadLink.Listener {
                 + "• Tap, then touch again and move: drag\n"
                 + "• Space, then slide: scroll\n"
                 + "• Typing is ignored automatically");
+
+        // --- The Titan's scroll assistant (collapsed unless its setting is on)
+        final LinearLayout assistOuter = root;
+        root = collapsible("Titan scroll assistant", prefs.getBoolean(Prefs.ASSIST_FOLLOWS_POINTER, false));
+        assistStatus = text("");
+        LinearLayout grant = new LinearLayout(this);
+        grant.setOrientation(LinearLayout.VERTICAL);
+        assistGrantBox = grant;
+        root.addView(grant);
+        TextView gt = new TextView(this);
+        gt.setText("To let TitanPointer switch it, enable USB debugging, connect a computer and run this once "
+                + "(it stays granted through updates):");
+        grant.addView(gt);
+        TextView gc = new TextView(this);
+        gc.setTypeface(Typeface.MONOSPACE);
+        gc.setTextIsSelectable(true);
+        gc.setTextSize(12);
+        gc.setPadding(0, (int) (6 * dp), 0, (int) (6 * dp));
+        gc.setText(ScrollAssist.GRANT_COMMAND);
+        grant.addView(gc);
+        Button gcopy = new Button(this);
+        gcopy.setText("Copy command");
+        gcopy.setOnClickListener(v -> {
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(ClipData.newPlainText("adb", ScrollAssist.GRANT_COMMAND));
+            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+        });
+        grant.addView(gcopy);
+        followSwitch = switchPref(Prefs.ASSIST_FOLLOWS_POINTER, "Turn the scroll assistant off when pointer mode is off", false);
+        hint("The keyboard stops scrolling pages while pointer mode is off. Turning pointer mode on turns it back "
+                + "on, since the pointer needs it. If you turn the TitanPointer service off, the scroll assistant "
+                + "stays as it was.");
+        root = assistOuter;
 
         // --- Advanced: root / ADB
         boolean helperMode = !Prefs.MODE_NOROOT.equals(prefs.getString(Prefs.MODE, Prefs.MODE_NOROOT));
@@ -296,10 +349,6 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         switchPref(Prefs.TAP_DELAY_TEST, "Test: taps on the keyboard click 1 s late", false);
         switchPref(Prefs.KEY_TIMER_TEST, "Test: send the click key's click from a timer", false);
         hint("For tracking down clicks that don't work. Leave off normally.");
-        diagText = text("");
-        diagText.setTypeface(Typeface.MONOSPACE);
-        diagText.setTextSize(11);
-        diagText.setTextIsSelectable(true);
         LinearLayout dr = new LinearLayout(this);
         Button copyDiag = new Button(this);
         copyDiag.setText("Copy");
@@ -319,6 +368,10 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         dr.addView(clearDiag);
         root.addView(dr);
         diagButtons = dr;
+        diagText = text("");
+        diagText.setTypeface(Typeface.MONOSPACE);
+        diagText.setTextSize(11);
+        diagText.setTextIsSelectable(true);
         root = diagOuter;
     }
 
@@ -449,6 +502,14 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         zoneSwitch.setChecked(prefs.getBoolean(Prefs.ZONE_ON, false));
         testPad.setZone(prefs.getBoolean(Prefs.ZONE_ON, false) ? new int[] {prefs.getInt(Prefs.ZONE_XMIN, 0),
                 prefs.getInt(Prefs.ZONE_XMAX, 0), prefs.getInt(Prefs.ZONE_YMIN, 0), prefs.getInt(Prefs.ZONE_YMAX, 0)} : null);
+
+        boolean granted = ScrollAssist.canWrite(this);
+        lastGranted = granted;
+        assistStatus.setText(granted ? "✓ TitanPointer can switch the scroll assistant (currently "
+                + (ScrollAssist.isOn(this) ? "on" : "off") + ")"
+                : "✗ TitanPointer isn't allowed to switch the scroll assistant yet.");
+        assistGrantBox.setVisibility(granted ? View.GONE : View.VISIBLE);
+        followSwitch.setEnabled(granted);
 
         for (Runnable r : keyLabels) r.run();
         if (diagText != null) {

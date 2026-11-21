@@ -69,7 +69,7 @@
   <div class="scroll" id="scroll"><div class="content" id="content"></div></div>
 </div>
 <script>
-  // Mirrors MainActivity.build() as of 1.22 (no-root mode; Advanced and Diagnostics collapsed).
+  // Mirrors MainActivity.build() as of 1.24 (no-root mode; Titan scroll assistant, Advanced and Diagnostics collapsed).
   const c = document.getElementById('content');
   const add = (html) => c.insertAdjacentHTML('beforeend', html);
   const section = (t) => add(`<div class="section">${t}</div>`);
@@ -115,6 +115,8 @@
   seek('Ignore touches after a key press', 0, 1000, 350, (v) => v + ' ms');
   seek('Ignore touches that start in the top key row', 0, 40, 22, (v) => v === 0 ? 'off' : v + '% of the keyboard');
   hint('The top row (Shift, Recents, the home key, Back, Alt) is part of the touch surface. Touches that start there don’t move the pointer or click; a slide that starts lower can still run into it.');
+  sw('Click standard buttons directly', true);
+  hint('After a keyboard touch the Titan refuses taps on ordinary Android buttons (toolbars, address bars) until a key is pressed. While it does, a tap on the keyboard clicks the button under the pointer through accessibility instead. Web pages and newer app screens still get a normal tap.');
 
   section('Scrolling (Space turns scroll mode on/off)');
   hint('In scroll mode, slides scroll and taps never click.');
@@ -133,6 +135,7 @@
   section('Gestures');
   text('• Slide: move the pointer\n• Tap: click (tap)\n• Tap twice: double tap\n• Tap, then touch again and move: drag\n• Space, then slide: scroll\n• Typing is ignored automatically');
 
+  section('▸ Titan scroll assistant');
   section('▸ Advanced: root / ADB (untested)');
   section('▸ Diagnostics');
 </script>

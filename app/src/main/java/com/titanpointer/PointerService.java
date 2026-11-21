@@ -91,6 +91,7 @@ public final class PointerService extends AccessibilityService
         Diag.setEnabled(prefs.getBoolean(Prefs.DIAG, false));
         prefs.registerOnSharedPreferenceChangeListener(this);
         link.addListener(this);
+        repairAssist();
         if (prefs.getBoolean(Prefs.ENABLED, true)) activate();
         PointerTileService.requestUpdate(this);
         startKeepAlive();
@@ -197,6 +198,7 @@ public final class PointerService extends AccessibilityService
         if (active) return;
         active = true;
         Diag.log("pointer mode ON (" + (isNoRoot(prefs) ? "no root" : "helper") + "), foreground: " + foreground);
+        assistFollowPointer(true); // the pointer needs the scroll assistant to get keyboard touches
         tracker.reset();
         engine.setScrollLock(false);
         engine.setConfig(Prefs.engineConfig(this, screenW));
@@ -230,6 +232,7 @@ public final class PointerService extends AccessibilityService
         main.removeCallbacks(delayedPadClick);
         cancelScrollWait();
         main.removeCallbacks(timerKeyClick);
+        assistFollowPointer(false);
         trace.reset();
         scrollHeld = false;
         if (cursor != null) cursor.setState(CursorView.STATE_NORMAL);
@@ -520,6 +523,19 @@ public final class PointerService extends AccessibilityService
                 else deactivate();
                 PointerTileService.requestUpdate(this);
                 break;
+            case Prefs.ASSIST_FOLLOWS_POINTER:
+                if (!ScrollAssist.canWrite(this)) break;
+                // Turned on: match pointer mode now. Turned off: leave the keyboard scrolling on, as before.
+                boolean follow = p.getBoolean(Prefs.ASSIST_FOLLOWS_POINTER, false);
+                boolean want = !follow || active;
+                if (ScrollAssist.isOn(this) != want) {
+                    boolean ok = ScrollAssist.set(this, want);
+                    Diag.log("scroll assistant " + (want ? "on" : "off") + " (setting changed)" + (ok ? "" : " FAILED"));
+                }
+                break;
+            case Prefs.ASSIST_OFF_FOR_CLICK:
+            case Prefs.ELEMENT_CLICK:
+                break;
             case Prefs.GRAB:
                 if (active) link.setGrab(p.getBoolean(Prefs.GRAB, false));
                 break;
@@ -734,9 +750,49 @@ public final class PointerService extends AccessibilityService
         if (!active) return;
         setCursorVisible(true);
         flash();
+        if (fromPad && elementClick(source, x, y)) return;
+        sendTap(source, fromPad, x, y);
+    }
+
+    private void sendTap(String source, boolean fromPad, float x, float y) {
         final int n = trace.click(source, fromPad, x, y, focusWindowTouchMode());
         if (Diag.isEnabled()) Diag.log("  " + TITAN_SCROLL_PROP + " = " + titanScrollProp());
         injector.tap(x, y, Diag.isEnabled() ? what -> trace.tapResult(n, what) : null);
+    }
+
+    // ---- Element click ----
+    // The Titan's input reader sets debug.sf.forcescroll_view=yes on every keyboard-sensor event and =no only on
+    // events from another hardware device (keys, the screen). Injected taps never pass the reader, so after a
+    // keyboard tap the switch is always yes and the phone's View.onTouchEvent refuses the tap on standard Views.
+    // So while it's yes, a standard View under the pointer is clicked through accessibility instead.
+
+    /** Returns true if the click was handled by clicking the element under the pointer. */
+    private boolean elementClick(String source, float x, float y) {
+        if (!prefs.getBoolean(Prefs.ELEMENT_CLICK, true) || !"yes".equals(titanScrollProp())) return false;
+        android.view.accessibility.AccessibilityNodeInfo n = ElementClick.find(this, Math.round(x), Math.round(y));
+        if (n == null) {
+            if (Diag.isEnabled()) Diag.log("element click: nothing standard to click at the pointer, tapping");
+            return false;
+        }
+        boolean ok = ElementClick.click(n);
+        Diag.log("element click (" + source + "): " + ElementClick.describe(n) + (ok ? "" : " REFUSED, tapping"));
+        return ok;
+    }
+
+    /** 1.23's click fix left the scroll assistant off (the app died mid-click): turn it back on. */
+    private void repairAssist() {
+        if (!prefs.getBoolean(Prefs.ASSIST_OFF_FOR_CLICK, false)) return;
+        boolean ok = ScrollAssist.set(this, true);
+        prefs.edit().putBoolean(Prefs.ASSIST_OFF_FOR_CLICK, false).commit();
+        Diag.log("scroll assistant was left off by an interrupted click: turned back on" + (ok ? "" : " FAILED"));
+    }
+
+    /** "Scroll assistant off when pointer mode is off": follow pointer mode. */
+    private void assistFollowPointer(boolean pointerOn) {
+        if (!prefs.getBoolean(Prefs.ASSIST_FOLLOWS_POINTER, false) || !ScrollAssist.canWrite(this)) return;
+        if (ScrollAssist.isOn(this) == pointerOn) return;
+        boolean ok = ScrollAssist.set(this, pointerOn);
+        Diag.log("scroll assistant " + (pointerOn ? "on" : "off") + " with pointer mode" + (ok ? "" : " FAILED"));
     }
 
     private void onLongPress() {

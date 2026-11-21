@@ -9,6 +9,9 @@ on-screen pointer. Status at v1.2: the user reports the no-root mode is "mostly 
 - Usually on their phone: always **build the APK and send it** (SendUserFile, `display: attach`).
   Don't ask them to build. Keep `dist/TitanPointer-<version>.apk` current and bump
   `versionCode`/`versionName` in `app/build.gradle` for each APK you send.
+- **GitHub releases**: `.github/workflows/release.yml` (workflow_dispatch, input `notes`) builds and publishes tag
+  `v<versionName>`, name "Version <versionName>" (the user's convention), APK `TitanPointer-<version>.apk`. Run it on
+  `main` after merging (actions_run_trigger, ref main). It refuses if the release exists.
 - **Keep README.md current with every release** (install link, features, limitations) and re-render the
   settings images (`docs/screenshots/settings.html` mirrors MainActivity; `node docs/screenshots/render.js`).
 - Listen to what they say they observed. They were right that a no-root app can read the keyboard touches.
@@ -276,6 +279,51 @@ text. Unit tested on a d8-built dex (`FrameworkScanTest`, `src/test/resources/pr
 Diagnostics capture is off by default (`Prefs.DIAG` default false, `Diag.enabled` starts false; the tap test
 screen and the software search switch it on themselves). The Diagnostics section is collapsible like Advanced
 (shared `MainActivity.collapsible()`), expanded only when capturing is on.
+
+## v1.23: switch the scroll assistant (click fix)
+User's ADB tests: the Titan's Scroll Assistant switch writes Settings.Global **`touchpad_switch_value`** (1/0;
+`touchpad_switch` stays 1) and the phone mirrors it into `persist.sys.touchpad_switch`; `adb shell settings put
+global touchpad_switch_value 0` alone really turns keyboard scrolling off. The user is sure turning it off clears
+the tap block. 1.23 declares WRITE_SECURE_SETTINGS (granted once: `adb shell pm grant com.titanpointer
+android.permission.WRITE_SECURE_SETTINGS`; needs the build installed first). `ScrollAssist` reads/writes it.
+- **Click fix** (`Prefs.CLICK_FIX`, default on, needs the grant): a keyboard-tap click while
+  `debug.sf.forcescroll_view`=yes turns the assistant off, polls the switch every 10 ms (max 1 s) for `no`,
+  taps (double taps are both sent in the same cycle), then turns it back on when the tap(s) finish (2 s cap).
+  `Prefs.ASSIST_OFF_FOR_CLICK` is committed while it's off; still set at service start = repaired (back on).
+  The app otherwise never touches the assistant at start-up (the user asked for that). Logged in Diag ("click fix").
+- **`Prefs.ASSIST_FOLLOWS_POINTER`** (default off, the user's request: they dislike keyboard scrolling): pointer mode
+  on → assistant on, off → off. Turning the setting off turns the assistant back on. Service stopped while
+  pointer mode is off = it stays off. The toggle key still works (keys aren't pad touches).
+- Settings section "Titan scroll assistant" (between Clicking and Scrolling) shows the grant command until granted.
+- Unconfirmed on the phone: that the switch drops to `no` when the assistant goes off, and that turning it back on
+  doesn't lose a keyboard touch.
+
+**1.23 result**: turning the assistant off does NOT reset the switch (stayed `yes` for the whole 1 s wait; the click
+failed; Enter right after worked). The follow-pointer setting works. User ADB tests: with the assistant off a keyboard
+touch doesn't change the switch; `adb shell setprop debug.sf.forcescroll_view no` works (user won't use ADB/root per boot).
+
+## 1.24: how the switch really works (disassembled libinputreader.so from the user's phone)
+- `InputReader::processEventsForDeviceLocked`: before each raw event batch, `property_set("debug.sf.forcescroll_view",
+  device sources == 0x100008 (SOURCE_TOUCHPAD) ? "yes" : "no")`. So any keyboard-sensor event → yes, any key or
+  touchscreen event → no. Nothing depends on the focused app or settings.
+- `TouchInputMapper::sync`: a frame with pointerCount 0 also sets "no" (evidently doesn't stick after pad taps on
+  this phone; maybe hover reports). `KeyboardInputMapper::processKey` sets `debug.sf.real_key_code`.
+- Injected events (accessibility, IME, `input`) enter after the reader, so they never reset it. No app-only reset.
+- libinputflinger.so doesn't touch it; its Agui code (AguiTouchpadSwipeCheck, focus pkg, forced list) is Firefox's
+  forced scrolling.
+- **Correction**: the user's finger test was a finger tap **during** keyboard scrolling (not after): works in Chrome
+  (screen events set no), fails in Firefox (forced-scroll list: the pad becomes a fake finger, so the real tap is a
+  second pointer). Not evidence about the switch.
+- **1.24 fix: `ElementClick`** (`Prefs.ELEMENT_CLICK`, default on, no permission needed): a keyboard-tap click while the
+  switch is `yes` finds the top non-overlay window at the pointer, the deepest node there, and walks up to the first
+  clickable/editable node; if it or anything above it is virtual (mSourceNodeId high 32 bits not UNDEFINED_ITEM_ID/-1,
+  read by reflection after StateProbe.exempt(); unreadable = treat as virtual) it taps as before (web, Compose).
+  Otherwise ACTION_FOCUS (text fields) + ACTION_CLICK. Refused → tap. Logged ("element click"). The user once
+  rejected ACTION_CLICK because it ignored the pointer position; this picks the node by position.
+- The 1.23 click fix (assistant off per click) was removed; the start-up repair of `ASSIST_OFF_FOR_CLICK` stays.
+- UI: element click switch under Clicking; the scroll assistant grant + follow setting moved into a collapsible
+  "Titan scroll assistant" section (expanded only if the setting is on); the screen polls the permission every 1 s
+  while open (granting over ADB didn't refresh it); Diagnostics Copy/Clear now sit above the log.
 
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
