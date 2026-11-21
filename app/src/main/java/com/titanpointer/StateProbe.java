@@ -37,7 +37,7 @@ final class StateProbe {
     private StateProbe() {}
 
     /** Allows reading internal fields (diagnostics only; works on Android 10). */
-    private static void exempt() {
+    static void exempt() {
         if (exempted) return;
         exempted = true;
         try {

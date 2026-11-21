@@ -295,6 +295,33 @@ android.permission.WRITE_SECURE_SETTINGS`; needs the build installed first). `Sc
 - Unconfirmed on the phone: that the switch drops to `no` when the assistant goes off, and that turning it back on
   doesn't lose a keyboard touch.
 
+**1.23 result**: turning the assistant off does NOT reset the switch (stayed `yes` for the whole 1 s wait; the click
+failed; Enter right after worked). The follow-pointer setting works. User ADB tests: with the assistant off a keyboard
+touch doesn't change the switch; `adb shell setprop debug.sf.forcescroll_view no` works (user won't use ADB/root per boot).
+
+## 1.24: how the switch really works (disassembled libinputreader.so from the user's phone)
+- `InputReader::processEventsForDeviceLocked`: before each raw event batch, `property_set("debug.sf.forcescroll_view",
+  device sources == 0x100008 (SOURCE_TOUCHPAD) ? "yes" : "no")`. So any keyboard-sensor event → yes, any key or
+  touchscreen event → no. Nothing depends on the focused app or settings.
+- `TouchInputMapper::sync`: a frame with pointerCount 0 also sets "no" (evidently doesn't stick after pad taps on
+  this phone; maybe hover reports). `KeyboardInputMapper::processKey` sets `debug.sf.real_key_code`.
+- Injected events (accessibility, IME, `input`) enter after the reader, so they never reset it. No app-only reset.
+- libinputflinger.so doesn't touch it; its Agui code (AguiTouchpadSwipeCheck, focus pkg, forced list) is Firefox's
+  forced scrolling.
+- **Correction**: the user's finger test was a finger tap **during** keyboard scrolling (not after): works in Chrome
+  (screen events set no), fails in Firefox (forced-scroll list: the pad becomes a fake finger, so the real tap is a
+  second pointer). Not evidence about the switch.
+- **1.24 fix: `ElementClick`** (`Prefs.ELEMENT_CLICK`, default on, no permission needed): a keyboard-tap click while the
+  switch is `yes` finds the top non-overlay window at the pointer, the deepest node there, and walks up to the first
+  clickable/editable node; if it or anything above it is virtual (mSourceNodeId high 32 bits not UNDEFINED_ITEM_ID/-1,
+  read by reflection after StateProbe.exempt(); unreadable = treat as virtual) it taps as before (web, Compose).
+  Otherwise ACTION_FOCUS (text fields) + ACTION_CLICK. Refused → tap. Logged ("element click"). The user once
+  rejected ACTION_CLICK because it ignored the pointer position; this picks the node by position.
+- The 1.23 click fix (assistant off per click) was removed; the start-up repair of `ASSIST_OFF_FOR_CLICK` stays.
+- UI: element click switch under Clicking; the scroll assistant grant + follow setting moved into a collapsible
+  "Titan scroll assistant" section (expanded only if the setting is on); the screen polls the permission every 1 s
+  while open (granting over ADB didn't refresh it); Diagnostics Copy/Clear now sit above the log.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

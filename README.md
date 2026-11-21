@@ -9,11 +9,11 @@ touchpad with an on-screen mouse pointer. No root needed.
 <p>
   <img src="docs/images/settings-1.png" width="24%" alt="Settings: service status, pointer mode switch, how it works">
   <img src="docs/images/settings-2.png" width="24%" alt="Settings: pointer speed, acceleration, size">
-  <img src="docs/images/settings-3.png" width="24%" alt="Settings: Titan scroll assistant permission and switches">
+  <img src="docs/images/settings-3.png" width="24%" alt="Settings: clicking, including clicking standard buttons directly">
   <img src="docs/images/settings-4.png" width="24%" alt="Settings: click, long-press and toggle keys">
 </p>
 
-<sub>The settings screen (1.23) at the Titan's 1440 × 1440 resolution, with default settings. These are renderings of
+<sub>The settings screen (1.24) at the Titan's 1440 × 1440 resolution, with default settings. These are renderings of
 the app's layout (<code>docs/screenshots/</code>, made with <code>node docs/screenshots/render.js</code>), not
 captures from a phone.</sub>
 
@@ -46,52 +46,49 @@ captures from a phone.</sub>
 
 Hardware details (keyboard layout, sensor range, key codes): [docs/titan-hardware.md](docs/titan-hardware.md).
 
-## Keyboard taps on standard Android buttons (needs a one-time ADB command)
+## Keyboard taps on standard Android buttons
 
-On the Titan, a tap on the keyboard surface doesn't click classic Android buttons and toolbars, including
-the address bars and toolbar buttons of Firefox and Chrome. Keyboard taps work on web pages and in apps
-built with Jetpack Compose, and the click key (Enter) works everywhere.
+On the Titan, a fake tap right after a keyboard touch doesn't click classic Android buttons and toolbars,
+including the address bars and toolbar buttons of Firefox and Chrome. Since 1.24, **Click standard buttons
+directly** (under Clicking, on by default) works around it: while the phone is blocking taps, a tap on the
+keyboard clicks the standard button under the pointer through accessibility (for text fields: focus and
+click) instead of sending a fake touch. Web pages and Jetpack Compose screens accept fake taps, so they
+still get a normal tap. The click key (Enter) also works everywhere. Not yet confirmed on the phone.
 
-**Fix (1.23, not yet confirmed on the phone):** let TitanPointer switch the Titan's scroll assistant. With
-USB debugging on, run this once from a computer after installing:
+### Why
+
+This is the Titan's own software, not TitanPointer. Its input reader (`libinputreader.so`,
+`InputReader::processEventsForDeviceLocked`) sets the system property `debug.sf.forcescroll_view` to `yes` on
+every event from the keyboard touch sensor and to `no` on events from any other hardware device (a key, the
+touchscreen). While it's `yes`, the Titan's modified `View.onTouchEvent` refuses touches on standard views, so
+that keyboard scrolling doesn't press buttons. Fake taps from apps (and even ADB's `input` command) enter
+Android after the input reader, so they never reset it: every tap TitanPointer sends after a keyboard tap is
+refused by standard views. Only root or `adb shell setprop` can reset the property.
+
+## Titan scroll assistant setting (optional, needs a one-time ADB command)
+
+The collapsed **Titan scroll assistant** section has **Turn the scroll assistant off when pointer mode is off**
+(off by default): the keyboard then only scrolls pages while you're using the pointer, and pointer mode turns
+it back on (the pointer needs it). To allow it, run this once from a computer after installing:
 
 ```sh
 adb shell pm grant com.titanpointer android.permission.WRITE_SECURE_SETTINGS
 ```
 
-Then **Make keyboard taps click buttons** (in the app's *Titan scroll assistant* section, on by default)
-turns the scroll assistant off for a moment at each keyboard-tap click, waits until the phone has dropped
-the tap block, clicks, and turns it back on. If a click is ever interrupted (the app is killed mid-click),
-TitanPointer turns the scroll assistant back on the next time it starts.
-
-The same section has **Turn the scroll assistant off when pointer mode is off** (off by default): the
-keyboard then only scrolls pages while you're using the pointer. Pointer mode turns it on, since the
-pointer needs it. The scroll assistant setting is Settings.Global `touchpad_switch_value` (1 on, 0 off);
-the phone copies it into `persist.sys.touchpad_switch`.
-
-### Why
-
-This is the Titan's own software, not TitanPointer. Its keyboard scrolling feature (the scroll assistant,
-which TitanPointer needs left on) sets the system property `debug.sf.forcescroll_view` to `yes` whenever the
-keyboard surface is touched, and only a real key press sets it back to `no`. While it's `yes`, the Titan's
-modified `View.onTouchEvent` refuses taps on standard views, so that keyboard scrolling doesn't press
-buttons. You can see it without TitanPointer: scroll a page in Firefox with the keyboard, then tap the
-address bar with your finger.
-
-Apps can't inject key presses or change `debug.*` properties, but with the permission above they can turn
-the scroll assistant off, which stops the block. The full investigation is in [CLAUDE.md](CLAUDE.md).
+The scroll assistant is Settings.Global `touchpad_switch_value` (1 on, 0 off); the phone copies it into
+`persist.sys.touchpad_switch`.
 
 ## Install
 
-1. Install [`dist/TitanPointer-1.23.apk`](dist/TitanPointer-1.23.apk).
+1. Install [`dist/TitanPointer-1.24.apk`](dist/TitanPointer-1.24.apk).
 2. Open **TitanPointer** and turn on its accessibility service (Settings → Accessibility → TitanPointer).
    It draws the pointer, sends taps and swipes at the pointer, and reads key presses for the shortcuts.
    Nothing is collected or sent anywhere.
 3. Keep the Titan's keyboard scrolling (scroll assistant) turned on: without it the keyboard touches don't
    reach TitanPointer.
 4. Press **Alt + Space** and slide on the keyboard.
-5. Optional, so keyboard taps also click toolbars and buttons: run the `pm grant` command
-   [above](#keyboard-taps-on-standard-android-buttons-needs-a-one-time-adb-command) once.
+5. Optional: to have the keyboard stop scrolling pages while pointer mode is off, run the `pm grant`
+   command [above](#titan-scroll-assistant-setting-optional-needs-a-one-time-adb-command) once.
 
 The app shows a minimal, silent notification while the service runs. It keeps Android from stopping the
 service when you swipe the app away; you can hide it in the notification settings.
@@ -153,6 +150,7 @@ app/src/main/java/com/titanpointer/
   GestureEngine      single-finger touchpad gestures (unit tested)
   GestureInjector    taps, long presses and continued strokes via dispatchGesture()
   MainActivity       setup and settings screen
+  ElementClick       clicks the standard View under the pointer while the Titan blocks fake taps
   ScrollAssist       switches the Titan's scroll assistant (needs WRITE_SECURE_SETTINGS via ADB)
   Diag               in-app diagnostics log (off by default)
   ClickTrace         per-click diagnostics: timing, what's under the pointer, the app's response
