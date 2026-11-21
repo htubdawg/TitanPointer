@@ -10,5 +10,6 @@
     <string name="keepalive_title">Keyboard pointer ready</string>
     <string name="keepalive_text">Keeps the pointer working when the app is closed. Long-press to hide; the pointer keeps working.</string>
     <string name="focus_lost">TitanPointer lost keyboard focus to another window, so it can\'t see keyboard touches here. Toggle pointer mode to retry.</string>
+    <string name="assist_off_warning">The Titan\'s scroll assistant is off, so the pointer can\'t see keyboard touches. Turn it on in the Titan\'s settings.</string>
     <string name="typing_mode">Pointer off: type away. Use your shortcut or the tile to bring it back.</string>
 </resources>

@@ -325,6 +325,52 @@ touch doesn't change the switch; `adb shell setprop debug.sf.forcescroll_view no
   "Titan scroll assistant" section (expanded only if the setting is on); the screen polls the permission every 1 s
   while open (granting over ADB didn't refresh it); Diagnostics Copy/Clear now sit above the log.
 
+## v1.25: tabs
+- `MainActivity` is now tabs (user's choice): **Home** (service, pointer mode, scroll assistant status + button to the
+  Titan's setting, gestures/keys cheat sheet built from the current bindings, how it works), **Pointer** (direction,
+  pointer sliders), **Controls** (clicking, scrolling, Titan scroll assistant grant/follow, keys, letters), **Tools**
+  (input probe, collapsible Advanced root/ADB, diagnostics), **About** (version, GitHub, latest release). Plain tappable
+  tabs only: the user said no swiping and no keyboard shortcuts for tabs. Last tab kept in `Prefs.UI_TAB`. The version
+  is also the action bar subtitle.
+- Every slider has − / + buttons (`seekPref(..., step, ...)`; hold repeats). Steps are one slider unit, except
+  "Ignore touches after a key press", which steps 10 ms.
+- Scroll assistant checks: `PointerService.assistFollowPointer(true)` (no-root mode) turns the assistant on if it's
+  off and the WRITE_SECURE_SETTINGS grant is there, otherwise toasts `assist_off_warning`. `ProbeActivity` does the same
+  every 1 s while visible (red banner + button) and turns it back off on stop if it turned it on (unless pointer mode
+  is on). `ScrollAssist.settingsIntent` looks up an exported `*TouchpadActivity` in a package containing
+  "agui"/"led" (package name never confirmed), else opens Settings.
+- `docs/screenshots/settings.html` now has `showTab(i)`; render.js makes settings-1..6.png.
+
+## v1.26
+User: things were still logged with Capture diagnostics off. The tap test screen and the software search turned
+`Diag` on without setting `Prefs.DIAG`, so the switch said off while capturing (and the log showed). Both now set the
+pref (switch follows; `refresh()` syncs it). Logcat (`Log.w/d`) and the input probe's own log are separate and untouched.
+
+## v1.27–1.28: pointer look
+User asked for pointer choices + a custom one: colour picker yes; custom image click point = simple top-left/centre.
+1.27's code-drawn vector shapes were rejected ("atrocious", wanted **retro**, sourced from a Linux distro). **1.28** uses
+23 glyphs from the X11 cursor font (xorg font-cursor-misc, "These glyphs are unencumbered"; got it from Debian's
+xfonts-base via apt, since gitlab.freedesktop.org is blocked here; pcf2bdf). `scripts/retro-cursors.py` turns the BDF
+into `RetroCursors.java` (shape merged with mask: `#` fg in the chosen colour, `o` outline in black/white by contrast,
+hotspot = glyph origin, which the user specifically cares about). `PointerShape` renders a glyph to a 1:1 bitmap and
+draws it unfiltered at round(1.5 dp × size) px per glyph pixel; hotspot = middle of the hotspot pixel. Custom image
+(ACTION_OPEN_DOCUMENT, ≤256 px, `filesDir/cursor_custom.png`): longest side 24 dp × size, drawn crisp if small and
+blown up ≥2×. Prefs `cursor_look` (glyph id or `custom`, default `left_ptr`), `cursor_tint` (default black),
+`cursor_hotspot`, `cursor_image_ver` (new keys so 1.27's values don't carry over). Click/scroll ring behind the
+hotspot when it's at the edge, small on top otherwise. Pointer tab: Pointer look (preview on light/dark, 6-column
+glyph grid + Custom, colours, custom box, size, hide when idle), Movement, Direction. render.js reads the glyphs from
+RetroCursors.java into settings.html.
+
+## v1.29
+User: include **all** 77 glyphs (not a pick), in a scrolling box; Pointer look moved to the **bottom** of the Pointer tab
+(order: Movement incl. hide-when-idle, Direction, Pointer look); **Mirror** (`cursor_mirror`, flips bitmap + hotspot,
+custom too); **Invert colours** (`cursor_invert`). A true XOR/screen-inverting cursor is impossible for an overlay
+window (can't read what's under it; screen capture would need MediaProjection and lag), so invert = swap fill and
+outline (custom image: RGB inverted). Told the user; change it if they meant something else. Box = fixed 200 dp
+ScrollView, 7 unlabeled tiles per row, the selected cursor's name above it; it calls
+requestDisallowInterceptTouchEvent on DOWN so drags inside scroll the box, and scrolls to the selected row on open.
+Glyph order: pointer-like first (`FIRST` in scripts/retro-cursors.py), the rest in font order; labels in `LABELS`.
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

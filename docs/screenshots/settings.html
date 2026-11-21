@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Rendering of TitanPointer's settings screen (MainActivity.build(), no-root mode, default settings),
+  Rendering of TitanPointer's settings screen (MainActivity (tabs), no-root mode, default settings),
   styled as Android 10 Theme.Material.Light.DarkActionBar on the Titan's 1440x1440 screen (480dp at 3x).
   Regenerate the PNGs with: node docs/screenshots/render.js
 -->
@@ -19,9 +19,29 @@
             align-items: center; justify-content: space-between; padding: 0 12px 0 16px; }
   .status .icons { display: flex; gap: 6px; align-items: center; }
   .bar { height: 56px; background: var(--primary); color: #fff; font-size: 20px; font-weight: 500;
-         display: flex; align-items: center; padding: 0 16px; box-shadow: 0 2px 4px rgba(0,0,0,.25);
-         position: relative; z-index: 1; }
-  .scroll { height: 400px; overflow: hidden; }
+         display: flex; flex-direction: column; justify-content: center; padding: 0 16px; }
+  .bar .sub { font-size: 14px; font-weight: 400; opacity: .7; margin-top: 1px; }
+  .tabs { display: flex; background: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,.25); position: relative; z-index: 1; }
+  .tab { flex: 1; text-align: center; color: #fff; font-size: 14px; font-weight: 700; padding: 13px 0 10px;
+         border-bottom: 3px solid transparent; opacity: .65; letter-spacing: .3px; }
+  .tab.on { opacity: 1; border-bottom-color: #2196F3; }
+  .scroll { height: 356px; overflow: hidden; }
+  .seek .ctl { display: flex; align-items: center; }
+  .seek .step { width: 48px; height: 48px; flex: none; display: flex; align-items: center; justify-content: center; }
+  .seek .step span { width: 40px; height: 36px; background: #d6d7d7; border-radius: 2px; font-size: 20px; line-height: 36px;
+                     text-align: center; color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 1px 1px rgba(0,0,0,.12); }
+  .seek .ctl .track { flex: 1; }
+  .lookbox { height: 200px; overflow: hidden; border: 1px solid rgba(128,128,128,.38); border-radius: 6px; padding: 4px; }
+  .lrow { display: flex; }
+  .ltile { flex: 1; margin: 2px; height: 52px; border: 2px solid transparent; border-radius: 6px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+  .ltile.on { border-color: var(--accent); }
+  .tiles { display: flex; gap: 4px; padding-top: 8px; }
+  .tile { flex: 1; text-align: center; font-size: 12px; color: var(--text-secondary); padding: 4px 0; border: 2px solid transparent; border-radius: 6px; }
+  .tile.on { border-color: var(--accent); }
+  .swatches { display: flex; }
+  .swatches span { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; }
+  .swatches i { width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(128,128,128,.38); box-sizing: border-box; }
+  .swatches i.on { box-shadow: 0 0 0 3px #fafafa, 0 0 0 5.5px var(--accent); }
   .content { padding: 8px 16px 32px; }
   .section { font-size: 18px; font-weight: 700; color: var(--text-secondary); padding: 20px 0 6px; }
   .text { font-size: 15px; color: var(--text-secondary); padding: 4px 0; white-space: pre-line; line-height: 1.3; }
@@ -65,11 +85,13 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M2 22h20V2z"/></svg>
     <svg width="9" height="14" viewBox="0 0 10 16" fill="#fff"><rect x="3" y="0" width="4" height="2"/><rect x="0" y="2" width="10" height="14" rx="1"/></svg>
   </span></div>
-  <div class="bar">TitanPointer</div>
+  <div class="bar"><div>TitanPointer</div><div class="sub">Version 1.29</div></div>
+  <div class="tabs" id="tabs"></div>
   <div class="scroll" id="scroll"><div class="content" id="content"></div></div>
 </div>
 <script>
-  // Mirrors MainActivity.build() as of 1.24 (no-root mode; Titan scroll assistant, Advanced and Diagnostics collapsed).
+  // Mirrors MainActivity's tabs as of 1.25 (no-root mode, default settings, Advanced collapsed, diagnostics off).
+  // showTab(i) draws tab i; render.js calls it for each screenshot.
   const c = document.getElementById('content');
   const add = (html) => c.insertAdjacentHTML('beforeend', html);
   const section = (t) => add(`<div class="section">${t}</div>`);
@@ -77,67 +99,139 @@
   const hint = (t) => text(t, 'hint');
   const button = (t) => `<span class="btn">${t}</span>`;
   const sw = (label, on) => add(`<div class="switch"><span class="lbl">${label}</span><span class="sw ${on ? 'on' : ''}"><span class="track"></span><span class="thumb"></span></span></div>`);
-  const radio = (label, on) => add(`<div class="radio"><span class="rb ${on ? 'on' : ''}"></span>${label}</div>`);
   const seek = (label, min, max, def, fmt) => {
     const f = (def - min) / (max - min) * 100;
-    add(`<div class="seek"><div class="lbl">${label}: ${fmt(def)}</div><div class="track"><div class="line"></div><div class="fill" style="width:${f}%"></div><div class="knob" style="left:${f}%"></div></div></div>`);
+    add(`<div class="seek"><div class="lbl">${label}: ${fmt(def)}</div><div class="ctl"><div class="step"><span>−</span></div><div class="track"><div class="line"></div><div class="fill" style="width:${f}%"></div><div class="knob" style="left:${f}%"></div></div><div class="step"><span>+</span></div></div></div>`);
   };
   const spinner = (label, val) => add(`<div class="spinner"><span class="lbl">${label}</span><span class="val">${val}</span></div>`);
   const keyBinding = (label, desc) => { text(`${label}: ${desc}`); add(`<div class="row">${button('Set')}${button('Clear')}${button('Default')}</div>`); };
   const x = (v) => (v / 10).toFixed(1) + '×';
 
-  section('1. Turn on the service');
-  text('✓ Accessibility service is on', 'ok');
-  sw('Pointer mode', true);
-  hint('Toggle with Alt + Space (change it under Keys), or the Quick Settings tile “Keyboard pointer”.');
-
-  section('2. How it works');
-  hint('The Titan reports keyboard touches only to the app that has keyboard focus, so while pointer mode is on, TitanPointer holds the focus. Keys can’t reach the app underneath until you turn it off.');
-  text('• Slide: move the pointer · Tap: click\n• Enter: click · Alt + Enter: long press (change under Keys)\n• Space: scroll mode on/off\n• Alt + Space: pointer mode on/off');
-  spinner('Letter keys in pointer mode', 'Do nothing');
-  add(button('Open keyboard input probe'));
-
-  section('Direction');
-  sw('Swap X and Y', false);
-  sw('Invert horizontal', false);
-  sw('Invert vertical', false);
-
-  section('Pointer');
-  seek('Speed', 1, 20, 7, x);
-  seek('Acceleration', 0, 40, 10, (v) => (v / 10).toFixed(1));
-  seek('Vertical speed', 3, 40, 10, x);
-  seek('Pointer size', 6, 30, 10, x);
-  seek('Hide pointer when idle', 0, 30, 5, (v) => v === 0 ? 'never' : v + ' s');
-
-  section('Clicking');
-  sw('Tap to click', true);
-  sw('Tap, then touch and move to drag (adds a short click delay)', true);
-  seek('Ignore touches after a key press', 0, 1000, 350, (v) => v + ' ms');
-  seek('Ignore touches that start in the top key row', 0, 40, 22, (v) => v === 0 ? 'off' : v + '% of the keyboard');
-  hint('The top row (Shift, Recents, the home key, Back, Alt) is part of the touch surface. Touches that start there don’t move the pointer or click; a slide that starts lower can still run into it.');
-  sw('Click standard buttons directly', true);
-  hint('After a keyboard touch the Titan refuses taps on ordinary Android buttons (toolbars, address bars) until a key is pressed. While it does, a tap on the keyboard clicks the button under the pointer through accessibility instead. Web pages and newer app screens still get a normal tap.');
-
-  section('Scrolling (Space turns scroll mode on/off)');
-  hint('In scroll mode, slides scroll and taps never click.');
-  seek('Scroll speed', 2, 60, 15, x);
-  sw('Reverse scroll direction', false);
-  sw('Fling: a quick flick keeps scrolling', true);
-  hint('Flick and lift while still moving to keep scrolling; stop before lifting to stop dead.');
-
-  section('Keys');
-  keyBinding('Pointer mode on/off', 'Alt + Space');
-  hint('Works everywhere. The key is swallowed while it toggles pointer mode, so pick a combination you don’t type with.');
-  keyBinding('Click', 'Enter');
-  keyBinding('Long press', 'Alt + Enter');
-  hint('Click and long press act at the pointer while pointer mode is on.');
-
-  section('Gestures');
-  text('• Slide: move the pointer\n• Tap: click (tap)\n• Tap twice: double tap\n• Tap, then touch again and move: drag\n• Space, then slide: scroll\n• Typing is ignored automatically');
-
-  section('▸ Titan scroll assistant');
-  section('▸ Advanced: root / ADB (untested)');
-  section('▸ Diagnostics');
+  // Retro glyphs: render.js fills window.GLYPHS from RetroCursors.java ({id, label, hx, hy, rows}).
+  // Drawn like PointerShape.java: one glyph pixel = round(1.5dp x size) screen pixels, 3dp margin, no smoothing.
+  function drawGlyph(ctx, g, color, k) {
+    const light = (0.299 * parseInt(color.slice(1, 3), 16) + 0.587 * parseInt(color.slice(3, 5), 16) + 0.114 * parseInt(color.slice(5, 7), 16)) > 140;
+    g.rows.forEach((r, y) => [...r].forEach((ch, x) => {
+      if (ch === '.') return;
+      ctx.fillStyle = ch === '#' ? color : (light ? '#000' : '#fff');
+      ctx.fillRect(3 + x * k, 3 + y * k, k, k);
+    }));
+  }
+  function canvas(w, h, fn) {
+    const id = 'c' + Math.random().toString(36).slice(2);
+    add(`<canvas id="${id}" width="${w * 3}" height="${h * 3}" style="width:${w}px;height:${h}px;display:block"></canvas>`);
+    const ctx = document.getElementById(id).getContext('2d'); ctx.scale(3, 3); fn(ctx);
+  }
+  const TABS = ['Home', 'Pointer', 'Controls', 'Tools', 'About'];
+  const pages = [
+    () => {
+      section('Turn on the service');
+      text('✓ Accessibility service is on', 'ok');
+      sw('Pointer mode', true);
+      hint('Toggle with Alt + Space or the Quick Settings tile “Keyboard pointer”. Keys are set under Controls.');
+      text('✓ Titan scroll assistant is on', 'ok');
+      section('Gestures and keys');
+      text('• Slide: move the pointer\n• Tap: click · tap twice: double tap\n• Tap, then touch again and move: drag\n• Enter: click\n• Alt + Enter: long press\n• Space: scroll mode on/off (slides scroll, taps don’t click)\n• Alt + Space: pointer mode on/off\n• Typing is ignored automatically');
+      section('How it works');
+      hint('The Titan reports keyboard touches only to the app that has keyboard focus, so while pointer mode is on, TitanPointer holds the focus. Keys can’t reach the app underneath until you turn it off. The Titan’s scroll assistant has to stay on: without it no keyboard touches reach apps at all.');
+    },
+    () => {
+      section('Movement');
+      seek('Speed', 1, 20, 7, x);
+      seek('Acceleration', 0, 40, 10, (v) => (v / 10).toFixed(1));
+      seek('Vertical speed', 3, 40, 10, x);
+      seek('Hide pointer when idle', 0, 30, 5, (v) => v === 0 ? 'never' : v + ' s');
+      section('Direction');
+      sw('Swap X and Y', false);
+      sw('Invert horizontal', false);
+      sw('Invert vertical', false);
+      section('Pointer look');
+      const G = window.GLYPHS || [];
+      const arrow = G.find((g) => g.id === 'left_ptr');
+      canvas(448, 72, (c) => {
+        c.fillStyle = '#F2F2F2'; c.fillRect(0, 0, 224, 72); c.fillStyle = '#303030'; c.fillRect(224, 0, 224, 72);
+        if (arrow) for (const cx of [112, 336]) { c.save(); c.translate(Math.round((cx - (arrow.rows[0].length * 5 / 3 + 6) / 2) * 3) / 3, Math.round((36 - (arrow.rows.length * 5 / 3 + 6) / 2) * 3) / 3); drawGlyph(c, arrow, '#000000', 5 / 3); c.restore(); }
+      });
+      add('<div class="text" style="text-align:center">Arrow</div>');
+      hint(`All ${G.length} cursors of the X Window System’s cursor font (the original Unix/Linux pointers), or your own picture at the end. Scroll the box to see them all.`);
+      const items = G.concat([null]);
+      let html = '<div class="lookbox">';
+      for (let i = 0; i < items.length; i += 7) {
+        html += '<div class="lrow">' + items.slice(i, i + 7).map((g, j) => `<div class="ltile ${i + j === 0 ? 'on' : ''}"><canvas data-i="${i + j}" width="171" height="156" style="width:57px;height:52px"></canvas></div>`).join('') + '</div>';
+      }
+      add(html + '</div>');
+      document.querySelectorAll('canvas[data-i]').forEach((cv) => {
+        const c = cv.getContext('2d'); c.scale(3, 3);
+        const g = items[+cv.dataset.i];
+        if (!g) { c.fillStyle = 'rgba(128,128,128,.54)'; c.font = '28px Roboto'; c.textAlign = 'center'; c.fillText('+', 28.5, 36); return; }
+        let k = 5 / 3, gw = g.rows[0].length * k + 6, gh = g.rows.length * k + 6;
+        const fit = Math.min(1, 52 / gh); c.translate(Math.round((28.5 - gw * fit / 2) * 3) / 3, Math.round((26 - gh * fit / 2) * 3) / 3); c.scale(fit, fit); drawGlyph(c, g, '#000000', k);
+      });
+      sw('Mirror (flip left to right)', false);
+      sw('Invert colours (swap fill and outline)', false);
+      text('Colour');
+      add(`<div class="swatches">${['#000000', '#FFFFFF', '#FFEB3B', '#FF9800', '#F44336', '#E91E63', '#4CAF50', '#2196F3'].map((c, i) => `<span><i class="${i ? '' : 'on'}" style="background:${c}"></i></span>`).join('')}</div>`);
+      seek('Pointer size', 6, 30, 10, x);
+    },
+    () => {
+      section('Clicking');
+      sw('Tap to click', true);
+      sw('Tap, then touch and move to drag (adds a short click delay)', true);
+      seek('Ignore touches after a key press', 0, 1000, 350, (v) => v + ' ms');
+      seek('Ignore touches that start in the top key row', 0, 40, 22, (v) => v === 0 ? 'off' : v + '% of the keyboard');
+      hint('The top row (Shift, Recents, the home key, Back, Alt) is part of the touch surface. Touches that start there don’t move the pointer or click; a slide that starts lower can still run into it.');
+      sw('Click standard buttons directly', true);
+      hint('After a keyboard touch the Titan refuses taps on ordinary Android buttons (toolbars, address bars) until a key is pressed. While it does, a tap on the keyboard clicks the button under the pointer through accessibility instead. Web pages and newer app screens still get a normal tap.');
+      section('Scrolling');
+      hint('Space turns scroll mode on and off. In scroll mode, slides scroll and taps never click.');
+      seek('Scroll speed', 2, 60, 15, x);
+      sw('Reverse scroll direction', false);
+      sw('Fling: a quick flick keeps scrolling', true);
+      hint('Flick and lift while still moving to keep scrolling; stop before lifting to stop dead.');
+      section('Titan scroll assistant');
+      text('✓ TitanPointer can switch the scroll assistant (currently on)');
+      sw('Turn the scroll assistant off when pointer mode is off', false);
+      hint('The keyboard stops scrolling pages while pointer mode is off. Turning pointer mode on turns it back on, since the pointer needs it. If you turn the TitanPointer service off, the scroll assistant stays as it was.');
+      section('Keys');
+      keyBinding('Pointer mode on/off', 'Alt + Space');
+      hint('Works everywhere. The key is swallowed while it toggles pointer mode, so pick a combination you don’t type with.');
+      keyBinding('Click', 'Enter');
+      keyBinding('Long press', 'Alt + Enter');
+      hint('Click and long press act at the pointer while pointer mode is on.');
+      spinner('Letter keys in pointer mode', 'Do nothing');
+    },
+    () => {
+      section('Keyboard input probe');
+      hint('Shows everything the keyboard and screen send to an ordinary app. Useful to check that keyboard touches arrive at all.');
+      add(button('Open keyboard input probe'));
+      section('▸ Advanced: root / ADB (untested)');
+      section('Diagnostics');
+      hint('What the pointer saw recently: focus changes, which windows opened, keys and where they came from. If the pointer stops working somewhere, reproduce it, come back here and copy this.');
+      sw('Capture diagnostics', false);
+      add(button('Open tap test screen'));
+      add(button('Search phone software for the scroll switch'));
+      sw('Test: taps on the keyboard click 1 s late', false);
+      sw('Test: send the click key’s click from a timer', false);
+      hint('For tracking down clicks that don’t work. Leave off normally.');
+    },
+    () => {
+      section('TitanPointer');
+      text('Version 1.29 (build 30)');
+      hint('Turns the original Unihertz Titan’s touch-sensitive keyboard into a touchpad with an on-screen pointer. Nothing is collected or sent anywhere.');
+      section('Source code and updates');
+      text('https://github.com/htubdawg/TitanPointer');
+      add(button('Open on GitHub'));
+      add(button('Download the latest release'));
+      hint('Updates install over the old version: download the APK from the latest release and open it.');
+    },
+  ];
+  function showTab(i) {
+    document.getElementById('tabs').innerHTML = TABS.map((t, k) => `<div class="tab ${k === i ? 'on' : ''}">${t.toUpperCase()}</div>`).join('');
+    c.innerHTML = '';
+    pages[i]();
+    document.getElementById('scroll').scrollTop = 0;
+  }
+  showTab(0);
 </script>
 </body>
 </html>

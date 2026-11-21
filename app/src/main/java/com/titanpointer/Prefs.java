@@ -37,6 +37,13 @@ public final class Prefs {
     public static final int SENS_MIN = 1, SENS_MAX = 20, SENS_DEFAULT = 7;
     public static final String AUTOHIDE_S = "autohide_s";
     public static final String CURSOR_SIZE = "cursor_size";
+    /** Pointer look: a {@link PointerShape} style, its fill colour, and the custom image's click point. */
+    public static final String CURSOR_STYLE = "cursor_look", CURSOR_COLOR = "cursor_tint",
+            CURSOR_HOTSPOT = "cursor_hotspot";
+    /** Pointer flipped left to right; fill and outline colours swapped (custom image: colours inverted). */
+    public static final String CURSOR_MIRROR = "cursor_mirror", CURSOR_INVERT = "cursor_invert";
+    /** Bumped whenever a new custom pointer image is saved, so the service reloads it. */
+    public static final String CURSOR_IMAGE_VER = "cursor_image_ver";
     public static final String ENABLED = "enabled"; // pointer mode on/off
     public static final String TOGGLE_KEY = "toggle_key", TOGGLE_META = "toggle_meta";
     /** Alt + Space toggles pointer mode unless the user picks something else. */
@@ -60,6 +67,8 @@ public final class Prefs {
     public static final String ASSIST_OFF_FOR_CLICK = "assist_off_for_click";
     /** Capture the in-memory diagnostics log (off by default). */
     public static final String DIAG = "diag";
+    /** The settings screen's last open tab (UI only). */
+    public static final String UI_TAB = "ui_tab";
     public static final String ADB_PORT = "adb_port", ADB_TOKEN = "adb_token";
 
     private Prefs() {}

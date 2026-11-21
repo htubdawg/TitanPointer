@@ -35,6 +35,9 @@ public final class TapTestActivity extends Activity {
         super.onCreate(b);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         dp = getResources().getDisplayMetrics().density;
+        // The test logs into diagnostics: turn capturing on through the setting, so the switch shows it and
+        // turning the switch off really stops it.
+        Prefs.get(this).edit().putBoolean(Prefs.DIAG, true).apply();
         Diag.setEnabled(true);
 
         LinearLayout root = new LogGroup("screen layout");

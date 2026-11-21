@@ -535,12 +535,20 @@ public final class PointerService extends AccessibilityService
                 break;
             case Prefs.ASSIST_OFF_FOR_CLICK:
             case Prefs.ELEMENT_CLICK:
+            case Prefs.UI_TAB:
                 break;
             case Prefs.GRAB:
                 if (active) link.setGrab(p.getBoolean(Prefs.GRAB, false));
                 break;
             case Prefs.CURSOR_SIZE:
-                cursor.setScale(p.getInt(Prefs.CURSOR_SIZE, 10) / 10f);
+            case Prefs.CURSOR_STYLE:
+            case Prefs.CURSOR_COLOR:
+            case Prefs.CURSOR_HOTSPOT:
+            case Prefs.CURSOR_IMAGE_VER:
+            case Prefs.CURSOR_MIRROR:
+            case Prefs.CURSOR_INVERT:
+                cursor.loadLook(this, p);
+                lp.x = Integer.MIN_VALUE; // the hotspot may have moved: force a relayout
                 placeCursor();
                 break;
             case Prefs.MODE:
@@ -789,6 +797,16 @@ public final class PointerService extends AccessibilityService
 
     /** "Scroll assistant off when pointer mode is off": follow pointer mode. */
     private void assistFollowPointer(boolean pointerOn) {
+        if (pointerOn && !ScrollAssist.isOn(this) && isNoRoot(prefs)) {
+            // Without the assistant the keyboard touches never reach the focus window: turn it on, or say so.
+            if (ScrollAssist.set(this, true)) {
+                Diag.log("scroll assistant was off: turned on for pointer mode");
+            } else {
+                Diag.log("scroll assistant is off and can't be switched: pointer gets no keyboard touches");
+                Toast.makeText(this, R.string.assist_off_warning, Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         if (!prefs.getBoolean(Prefs.ASSIST_FOLLOWS_POINTER, false) || !ScrollAssist.canWrite(this)) return;
         if (ScrollAssist.isOn(this) == pointerOn) return;
         boolean ok = ScrollAssist.set(this, pointerOn);
@@ -885,7 +903,7 @@ public final class PointerService extends AccessibilityService
 
     private void createCursor() {
         cursor = new CursorView(this);
-        cursor.setScale(prefs.getInt(Prefs.CURSOR_SIZE, 10) / 10f);
+        cursor.loadLook(this, prefs);
         lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -923,8 +941,8 @@ public final class PointerService extends AccessibilityService
     }
 
     private void placeCursorParams() {
-        lp.x = Math.round(px) - cursor.hotspotPx();
-        lp.y = Math.round(py) - cursor.hotspotPx();
+        lp.x = Math.round(px) - cursor.hotspotX();
+        lp.y = Math.round(py) - cursor.hotspotY();
     }
 
     private void placeCursor() {
