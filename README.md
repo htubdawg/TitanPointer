@@ -9,12 +9,12 @@ touchpad with an on-screen mouse pointer. No root needed.
 > directed and tested by a human on a real Titan. Review it before you trust it with anything important.
 
 <p>
-  <img src="docs/images/settings-1.png" width="32%" alt="Home tab: service status, pointer mode switch, scroll assistant status, gestures and keys">
-  <img src="docs/images/settings-2.png" width="32%" alt="Pointer tab: pointer look with all 77 X11 cursors in a scrolling box">
-  <img src="docs/images/settings-3.png" width="32%" alt="Controls tab: clicking, including clicking standard buttons directly">
-  <img src="docs/images/settings-4.png" width="32%" alt="Controls tab: click, long-press and toggle keys">
-  <img src="docs/images/settings-5.png" width="32%" alt="Tools tab: keyboard input probe, advanced root/ADB, diagnostics">
-  <img src="docs/images/settings-6.png" width="32%" alt="About tab: version and GitHub links">
+  <img src="docs/images/tab-home.png" width="32%" alt="Home tab: service status, pointer mode switch, scroll assistant status, gestures and keys">
+  <img src="docs/images/tab-pointer.png" width="32%" alt="Pointer tab: pointer look with all 77 X11 cursors in a scrolling box">
+  <img src="docs/images/tab-controls.png" width="32%" alt="Controls tab: clicking, including clicking standard buttons directly">
+  <img src="docs/images/tab-controls-keys.png" width="32%" alt="Controls tab: click, long-press and toggle keys">
+  <img src="docs/images/tab-tools.png" width="32%" alt="Tools tab: keyboard input probe, advanced root/ADB, diagnostics">
+  <img src="docs/images/tab-about.png" width="32%" alt="About tab: version and GitHub links">
 </p>
 
 <sub>The settings screen (1.29) at the Titan's 1440 × 1440 resolution, with default settings: tabs Home, Pointer,

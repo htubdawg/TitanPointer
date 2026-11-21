@@ -339,7 +339,7 @@ touch doesn't change the switch; `adb shell setprop debug.sf.forcescroll_view no
   every 1 s while visible (red banner + button) and turns it back off on stop if it turned it on (unless pointer mode
   is on). `ScrollAssist.settingsIntent` looks up an exported `*TouchpadActivity` in a package containing
   "agui"/"led" (package name never confirmed), else opens Settings.
-- `docs/screenshots/settings.html` now has `showTab(i)`; render.js makes settings-1..6.png.
+- `docs/screenshots/settings.html` now has `showTab(i)`; render.js makes docs/images/tab-*.png (renamed from settings-N.png in 1.29: GitHub kept showing cached 1.24 images under the old names; if the README images ever look stale again, rename them).
 
 ## v1.26
 User: things were still logged with Capture diagnostics off. The tap test screen and the software search turned
