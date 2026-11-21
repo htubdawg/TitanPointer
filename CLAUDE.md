@@ -371,6 +371,20 @@ ScrollView, 7 unlabeled tiles per row, the selected cursor's name above it; it c
 requestDisallowInterceptTouchEvent on DOWN so drags inside scroll the box, and scrolls to the selected row on open.
 Glyph order: pointer-like first (`FIRST` in scripts/retro-cursors.py), the rest in font order; labels in `LABELS`.
 
+## v1.30: joystick mode
+`Prefs.JOYSTICK` (default off, top of the Controls tab). Designed with the user: the pad is split into thirds (zone picked at
+touch down; `joy_zone` = side width, default 33%). **Middle** = joystick with a hybrid floating centre: must start in the
+middle third, the landing point is the centre, and the finger may then leave the third. `GestureEngine` runs a 16 ms timer
+(`JOY_TICK_MS`, via the Scheduler) while held, since the pad may not report a still finger: speed = top speed ×
+t^curve, t = (distance − dead zone)/(reach − dead zone) clamped 0..1 (radial, pad-width units; defaults dead 0.015
+≈ 1.2 mm, reach 0.10 ≈ 8 mm, 1.2 screen widths/s, curve 2.0). Middle taps do nothing. In scroll mode (Space) the stick
+scrolls (scroll speed 1.5× = pointer speed). **Left** tap = click (waits the double-tap window); a pending click fires
+at once if the stick is touched. **Left double tap = drag lock** (`onDragBegin`; the stick drags); the next tap on either
+side releases it (no click). **Right** tap = long press (`Actions.onLongClick`; while the Titan switch is yes, an
+ACTION_LONG_CLICK on the first long-clickable standard View, like element click). Tap = no key during the touch, under
+tapSlop movement, ≤ 500 ms. Touchpad-only settings (speed, accel, tap to click, tap-drag) don't apply. Unit tested. Not
+yet tried on the phone. Drags on standard Views still hit the Titan block (as tap-drag does).
+
 ## Open items / ideas
 - Rejected by the user (don't suggest again): haptic feedback on click, per-app rules (bloat), edge
   auto-scroll while dragging (Android's text selection already scrolls).

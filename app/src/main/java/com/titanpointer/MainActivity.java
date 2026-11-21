@@ -374,6 +374,7 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
     private final SharedPreferences.OnSharedPreferenceChangeListener lookListener = (p, key) -> {
         if (key != null && key.startsWith("cursor_")) updateLook();
+        if (Prefs.JOYSTICK.equals(key) && this.cheatSheet != null) updateKeyTexts();
     };
 
     private void updateLook() {
@@ -568,6 +569,25 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
     private void buildControls() {
         root = pageBodies[CONTROLS];
+        section("Joystick mode");
+        switchPref(Prefs.JOYSTICK, "Joystick mode", false);
+        hint("Splits the keyboard into thirds. Middle: a joystick. Touch, then hold your finger away from where it "
+                + "landed; the further away, the faster the pointer moves (your finger may leave the middle). Left: "
+                + "tap to click, tap twice to hold a drag (steer with the stick, tap either side to let go). Right: "
+                + "tap to long press. Taps in the middle do nothing. In scroll mode (Space) the stick scrolls.");
+        seekPref(Prefs.JOY_ZONE, "Click zone width (each side)", 15, 45, Prefs.JOY_ZONE_DEFAULT, 1,
+                v -> v + "% of the keyboard");
+        seekPref(Prefs.JOY_DEAD, "Stick dead zone", 0, 60, Prefs.JOY_DEAD_DEFAULT, 1,
+                v -> v == 0 ? "none" : String.format(Locale.US, "≈ %.1f mm", v / 1000f * PAD_WIDTH_MM));
+        seekPref(Prefs.JOY_REACH, "Distance for top speed", 4, 25, Prefs.JOY_REACH_DEFAULT, 1,
+                v -> String.format(Locale.US, "≈ %.0f mm", v / 100f * PAD_WIDTH_MM));
+        seekPref(Prefs.JOY_SPEED, "Stick top speed", 2, 40, Prefs.JOY_SPEED_DEFAULT, 1,
+                v -> String.format(Locale.US, "%.1f screen widths/s", v / 10f));
+        seekPref(Prefs.JOY_CURVE, "Stick response curve", 10, 40, Prefs.JOY_CURVE_DEFAULT, 1,
+                v -> v == 10 ? "linear" : String.format(Locale.US, "%.1f (finer near the centre)", v / 10f));
+        hint("Speed, acceleration, tap to click and tap-then-drag are for touchpad mode; the stick has its own "
+                + "settings above.");
+
         section("Clicking");
         switchPref(Prefs.TAP, "Tap to click", true);
         switchPref(Prefs.TAP_DRAG, "Tap, then touch and move to drag (adds a short click delay)", true);
@@ -801,6 +821,9 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
     }
 
+    /** The Titan's keyboard area is about 78 mm wide (docs/titan-hardware.md). */
+    private static final float PAD_WIDTH_MM = 78f;
+
     private TextView toggleHint, homeAssistStatus, cheatSheet, scrollHint;
     private Button homeAssistButton;
 
@@ -811,13 +834,22 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         String lng = keyName(Prefs.LONG_KEY, Prefs.DEFAULT_LONG_KEY, Prefs.LONG_META, Prefs.DEFAULT_LONG_META);
         toggleHint.setText("Toggle with " + toggle + " or the Quick Settings tile “Keyboard pointer”. "
                 + "Keys are set under Controls.");
+        boolean joy = prefs.getBoolean(Prefs.JOYSTICK, false);
         StringBuilder sb = new StringBuilder();
-        sb.append("• Slide: move the pointer\n");
-        sb.append("• Tap: click · tap twice: double tap\n");
-        sb.append("• Tap, then touch again and move: drag\n");
+        if (joy) {
+            sb.append("Joystick mode (keyboard in thirds):\n");
+            sb.append("• Middle: hold away from where you touched to move; further = faster\n");
+            sb.append("• Left: tap to click · tap twice: hold a drag, tap again to let go\n");
+            sb.append("• Right: tap to long press\n");
+        } else {
+            sb.append("• Slide: move the pointer\n");
+            sb.append("• Tap: click · tap twice: double tap\n");
+            sb.append("• Tap, then touch again and move: drag\n");
+        }
         if (!"none".equals(click)) sb.append("• ").append(click).append(": click\n");
         if (!"none".equals(lng)) sb.append("• ").append(lng).append(": long press\n");
-        sb.append("• Space: scroll mode on/off (slides scroll, taps don't click)\n");
+        sb.append(joy ? "• Space: scroll mode on/off (the stick scrolls)\n"
+                : "• Space: scroll mode on/off (slides scroll, taps don't click)\n");
         if (!"none".equals(toggle)) sb.append("• ").append(toggle).append(": pointer mode on/off\n");
         sb.append("• Typing is ignored automatically");
         cheatSheet.setText(sb);

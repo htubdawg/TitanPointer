@@ -27,6 +27,7 @@ public class GestureEngineTest {
             @Override public void onScrollEnd(float vx, float vy) { log.add("scrollEnd"); flingX = vx; flingY = vy; }
             @Override public void onDragBegin() { log.add("dragBegin"); }
             @Override public void onDragEnd() { log.add("dragEnd"); }
+            @Override public void onLongClick() { log.add("longClick"); }
         }, () -> now, new GestureEngine.Scheduler() {
             @Override public void post(Runnable r, long d) { scheduled.add(new Object[] {r, now + d}); }
             @Override public void cancel(Runnable r) { scheduled.removeIf(o -> o[0] == r); }
@@ -318,5 +319,161 @@ public class GestureEngineTest {
         assertEquals(10, d.slots);
         InputDeviceInfo screen = InputDeviceInfo.parse("D /dev/input/event2\tmtk-tpd\t2\t2\t0 1439 0 1439\t10\t0");
         assertTrue(d.score(1440, 1440) > screen.score(1440, 1440));
+    }
+
+    // ---- Joystick mode ----
+
+    private void joystick() {
+        GestureEngine.Config c = engine.getConfig();
+        c.joystick = true;
+        c.joyClickZone = 1f / 3f;
+        c.joyDeadZone = 0.01f;
+        c.joyReach = 0.1f;
+        c.joyMaxSpeed = 1f; // 1000 px/s at full deflection
+        c.joyCurve = 1f;
+        engine.setConfig(c);
+    }
+
+    /** Hold a single finger at (x, y) for ms, in 16 ms steps (the pad may not report while still). */
+    private void hold(long ms) {
+        for (long t = 0; t < ms; t += 16) advance(16);
+    }
+
+    @Test
+    public void joystickHoldMovesPointerWithoutPadEvents() {
+        joystick();
+        frame(0, 1, 500, 200);          // middle zone: centre here
+        advance(16); frame(0, 1, 600, 200); // 0.1 pad widths right: full speed
+        hold(1000);                      // finger still, no more reports
+        assertTrue("moved " + moveX, moveX > 900 && moveX < 1100);
+        assertEquals(0f, moveY, 0.01f);
+        float before = moveX;
+        frame(0, -1, 0, 0);
+        hold(500);
+        assertEquals(before, moveX, 0.01f); // stops on lift
+        assertEquals(List.of("move"), log); // no click from the stick
+    }
+
+    @Test
+    public void joystickDeadZoneAndSpeedCurve() {
+        joystick();
+        frame(0, 1, 500, 200);
+        advance(16); frame(0, 1, 508, 200); // inside the dead zone
+        hold(500);
+        assertEquals(0f, moveX, 0.01f);
+        frame(0, 1, 555, 200); // halfway to full: half speed with a linear curve
+        hold(1000);
+        assertTrue("moved " + moveX, moveX > 400 && moveX < 600);
+    }
+
+    @Test
+    public void joystickCentreFloatsAndFingerMayLeaveMiddle() {
+        joystick();
+        frame(0, 1, 400, 200);           // lands near the left edge of the middle
+        advance(16); frame(0, 1, 300, 200); // dragged into the left third: still the stick
+        hold(500);
+        assertTrue(moveX < -400);
+        frame(0, -1, 0, 0);
+        hold(500);
+        assertEquals(List.of("move"), log);
+    }
+
+    @Test
+    public void joystickMiddleTapDoesNothing() {
+        joystick();
+        frame(0, 1, 500, 200);
+        advance(60); frame(0, -1, 0, 0);
+        hold(500);
+        assertTrue(log.isEmpty());
+    }
+
+    @Test
+    public void joystickLeftTapClicksRightTapLongPresses() {
+        joystick();
+        frame(0, 1, 100, 200);
+        advance(80); frame(0, -1, 0, 0);
+        advance(300);
+        assertEquals(List.of("click"), log);
+        frame(0, 1, 900, 200);
+        advance(80); frame(0, -1, 0, 0);
+        assertEquals(List.of("click", "longClick"), log);
+    }
+
+    @Test
+    public void joystickDoubleTapLeftLocksDragUntilNextTap() {
+        joystick();
+        frame(0, 1, 100, 200);
+        advance(60); frame(0, -1, 0, 0);
+        advance(100);
+        frame(0, 1, 110, 200);
+        advance(60); frame(0, -1, 0, 0);
+        assertEquals(List.of("dragBegin"), log);
+        assertTrue(engine.isDragLocked());
+        frame(0, 1, 500, 200);           // steer while dragging
+        advance(16); frame(0, 1, 600, 200);
+        hold(200);
+        frame(0, -1, 0, 0);
+        assertTrue(engine.isDragLocked()); // lifting the stick keeps the drag
+        hold(500);
+        frame(0, 1, 900, 200);            // a tap on either side lets go (no long press)
+        advance(60); frame(0, -1, 0, 0);
+        assertEquals(List.of("dragBegin", "move", "dragEnd"), log);
+        assertTrue(!engine.isDragLocked());
+    }
+
+    @Test
+    public void joystickPendingClickFiresBeforeStickMoves() {
+        joystick();
+        frame(0, 1, 100, 200);
+        advance(60); frame(0, -1, 0, 0);
+        advance(50);
+        frame(0, 1, 500, 200); // stick touched within the double-tap window
+        assertEquals(List.of("click"), log);
+        advance(16); frame(0, 1, 600, 200);
+        hold(100);
+        frame(0, -1, 0, 0);
+        hold(500);
+        assertEquals(List.of("click", "move"), log);
+    }
+
+    @Test
+    public void joystickKeyPressTouchesDontClickOrMove() {
+        joystick();
+        frame(0, 1, 900, 200);    // Enter's touch on the right
+        advance(10); engine.onKeyActivity();
+        advance(60); frame(0, -1, 0, 0);
+        advance(400);
+        frame(0, 1, 500, 200);    // a letter in the middle
+        engine.onKeyActivity();
+        advance(16); frame(0, 1, 600, 200);
+        hold(300);
+        frame(0, -1, 0, 0);
+        assertTrue(log.toString(), log.isEmpty());
+    }
+
+    @Test
+    public void joystickScrollModeScrolls() {
+        joystick();
+        engine.setScrollLock(true);
+        frame(0, 1, 500, 200);
+        advance(16); frame(0, 1, 500, 300);
+        hold(500);
+        frame(0, -1, 0, 0);
+        assertEquals(0f, moveY, 0.01f);
+        assertTrue("scrolled " + scrollY, scrollY > 300);
+        assertEquals(List.of("scrollBegin", "scrollEnd"), log);
+    }
+
+    @Test
+    public void joystickTopRowIgnored() {
+        joystick();
+        engine.getConfig().ignoreTopFrac = 0.22f;
+        frame(0, 1, 100, 20);
+        advance(60); frame(0, -1, 0, 0);
+        frame(0, 1, 500, 20);
+        advance(16); frame(0, 1, 600, 20);
+        hold(300); frame(0, -1, 0, 0);
+        advance(500);
+        assertTrue(log.isEmpty());
     }
 }

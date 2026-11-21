@@ -17,7 +17,7 @@ touchpad with an on-screen mouse pointer. No root needed.
   <img src="docs/images/tab-about.png" width="32%" alt="About tab: version and GitHub links">
 </p>
 
-<sub>The settings screen (1.29) at the Titan's 1440 × 1440 resolution, with default settings: tabs Home, Pointer,
+<sub>The settings screen (1.30) at the Titan's 1440 × 1440 resolution, with default settings: tabs Home, Pointer,
 Controls, Tools and About. Every slider has − and + buttons for fine steps (hold to repeat). These are renderings of
 the app's layout (<code>docs/screenshots/</code>, made with <code>node docs/screenshots/render.js</code>), not
 captures from a phone.</sub>
@@ -41,6 +41,22 @@ captures from a phone.</sub>
 | Space | Scroll mode on/off |
 | Back | Back, as usual |
 | Letters | Nothing by default (setting: turn pointer mode off) |
+
+### Joystick mode (Controls tab, off by default)
+
+The keyboard is split into thirds (the side width is adjustable):
+
+| Where | Result |
+|---|---|
+| Middle: touch and hold away from where you landed | Move the pointer; further from that spot = faster. Your finger may slide out of the middle. |
+| Middle: quick tap | Nothing |
+| Left: tap | Click |
+| Left: tap twice | Hold a drag: steer with the stick, tap either side to let go |
+| Right: tap | Long press ("right click") |
+| Space (scroll mode), then hold the stick | Scroll continuously; further = faster |
+
+The centre is wherever your finger lands in the middle third, so you never have to find an exact spot. Dead zone,
+distance for top speed, top speed and response curve are adjustable. Keys work as in touchpad mode.
 
 - The Titan's keyboard reports **one finger** at a time, so there are no multi-finger gestures.
 - Touches that start on the top key row (Shift, Recents, home, Back, Alt) are ignored, so pressing those
@@ -96,7 +112,7 @@ The scroll assistant is Settings.Global `touchpad_switch_value` (1 on, 0 off); t
 ## Install
 
 1. Install the APK from the [latest release](https://github.com/htubdawg/titanpointer/releases/latest)
-   (or [`dist/TitanPointer-1.29.apk`](dist/TitanPointer-1.29.apk) in this repository).
+   (or [`dist/TitanPointer-1.30.apk`](dist/TitanPointer-1.30.apk) in this repository).
 2. Open **TitanPointer** and turn on its accessibility service (Settings → Accessibility → TitanPointer).
    It draws the pointer, sends taps and swipes at the pointer, and reads key presses for the shortcuts.
    Nothing is collected or sent anywhere.
