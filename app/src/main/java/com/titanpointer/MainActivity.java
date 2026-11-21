@@ -569,31 +569,6 @@ public final class MainActivity extends Activity implements PadLink.Listener {
 
     private void buildControls() {
         root = pageBodies[CONTROLS];
-        section("Joystick mode");
-        switchPref(Prefs.JOYSTICK, "Joystick mode", false);
-        hint("Splits the keyboard into thirds. Middle: a joystick. Touch, then hold your finger away from where it "
-                + "landed; the further away, the faster the pointer moves (your finger may leave the middle). Left: "
-                + "tap to click, tap twice to hold a drag (steer with the stick, tap either side to let go). Right: "
-                + "tap to long press. Taps in the middle do nothing. In scroll mode (Space) the stick scrolls.");
-        switchPref(Prefs.JOY_FLOAT, "Floating centre (where your finger lands)", true);
-        hint("Off: the centre is fixed in the middle of the stick area, so where you touch already sets the "
-                + "direction and speed.");
-        switchPref(Prefs.JOY_SPACEBAR, "Stick on the spacebar only", false);
-        hint("The stick only starts on the spacebar; other touches in the middle do nothing. The click zones "
-                + "stay at the sides. Pressing Space down still switches scroll mode.");
-        seekPref(Prefs.JOY_ZONE, "Click zone width (each side)", 15, 45, Prefs.JOY_ZONE_DEFAULT, 1,
-                v -> v + "% of the keyboard");
-        seekPref(Prefs.JOY_DEAD, "Stick dead zone", 0, 60, Prefs.JOY_DEAD_DEFAULT, 1,
-                v -> v == 0 ? "none" : String.format(Locale.US, "≈ %.1f mm", v / 1000f * PAD_WIDTH_MM));
-        seekPref(Prefs.JOY_REACH, "Distance for top speed", 4, 25, Prefs.JOY_REACH_DEFAULT, 1,
-                v -> String.format(Locale.US, "≈ %.0f mm", v / 100f * PAD_WIDTH_MM));
-        seekPref(Prefs.JOY_SPEED, "Stick top speed", 2, 40, Prefs.JOY_SPEED_DEFAULT, 1,
-                v -> String.format(Locale.US, "%.1f screen widths/s", v / 10f));
-        seekPref(Prefs.JOY_CURVE, "Stick response curve", 10, 40, Prefs.JOY_CURVE_DEFAULT, 1,
-                v -> v == 10 ? "linear" : String.format(Locale.US, "%.1f (finer near the centre)", v / 10f));
-        hint("Speed, acceleration, tap to click and tap-then-drag are for touchpad mode; the stick has its own "
-                + "settings above.");
-
         section("Clicking");
         switchPref(Prefs.TAP, "Tap to click", true);
         switchPref(Prefs.TAP_DRAG, "Tap, then touch and move to drag (adds a short click delay)", true);
@@ -649,6 +624,31 @@ public final class MainActivity extends Activity implements PadLink.Listener {
         hint("Click and long press act at the pointer while pointer mode is on.");
         spinnerPref(Prefs.LETTERS, "Letter keys in pointer mode", new String[] {Prefs.LETTERS_NOTHING, Prefs.LETTERS_EXIT},
                 new String[] {"Do nothing", "Turn pointer mode off"}, Prefs.LETTERS_NOTHING);
+
+        section("Joystick mode");
+        switchPref(Prefs.JOYSTICK, "Joystick mode", false);
+        hint("Splits the keyboard into thirds. Middle: a joystick. Touch, then hold your finger away from where it "
+                + "landed; the further away, the faster the pointer moves (your finger may leave the middle). Left: "
+                + "tap to click, tap twice to hold a drag (steer with the stick, tap either side to let go). Right: "
+                + "tap to long press. Taps in the middle do nothing. In scroll mode (Space) the stick scrolls.");
+        switchPref(Prefs.JOY_FLOAT, "Floating centre (where your finger lands)", true);
+        hint("Off: the centre is fixed in the middle of the stick area, so where you touch already sets the "
+                + "direction and speed.");
+        switchPref(Prefs.JOY_SPACEBAR, "Stick on the spacebar only", false);
+        hint("The stick only starts on the spacebar; other touches in the middle do nothing. The click zones "
+                + "stay at the sides. Pressing Space down still switches scroll mode.");
+        seekPref(Prefs.JOY_ZONE, "Click zone width (each side)", 15, 45, Prefs.JOY_ZONE_DEFAULT, 1,
+                v -> v + "% of the keyboard");
+        seekPref(Prefs.JOY_DEAD, "Stick dead zone", 0, 60, Prefs.JOY_DEAD_DEFAULT, 1,
+                v -> v == 0 ? "none" : String.format(Locale.US, "≈ %.1f mm", v / 1000f * PAD_WIDTH_MM));
+        seekPref(Prefs.JOY_REACH, "Distance for top speed", 4, 25, Prefs.JOY_REACH_DEFAULT, 1,
+                v -> String.format(Locale.US, "≈ %.0f mm", v / 100f * PAD_WIDTH_MM));
+        seekPref(Prefs.JOY_SPEED, "Stick top speed", 2, 40, Prefs.JOY_SPEED_DEFAULT, 1,
+                v -> String.format(Locale.US, "%.1f screen widths/s", v / 10f));
+        seekPref(Prefs.JOY_CURVE, "Stick response curve", 10, 40, Prefs.JOY_CURVE_DEFAULT, 1,
+                v -> v == 10 ? "linear" : String.format(Locale.US, "%.1f (finer near the centre)", v / 10f));
+        hint("Speed, acceleration, tap to click and tap-then-drag are for touchpad mode; the stick has its own "
+                + "settings above.");
     }
 
     private void buildTools() {

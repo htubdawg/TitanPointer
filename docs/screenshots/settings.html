@@ -174,19 +174,6 @@
       seek('Pointer size', 6, 30, 10, x);
     },
     () => {
-      section('Joystick mode');
-      sw('Joystick mode', false);
-      hint('Splits the keyboard into thirds. Middle: a joystick. Touch, then hold your finger away from where it landed; the further away, the faster the pointer moves (your finger may leave the middle). Left: tap to click, tap twice to hold a drag (steer with the stick, tap either side to let go). Right: tap to long press. Taps in the middle do nothing. In scroll mode (Space) the stick scrolls.');
-      sw('Floating centre (where your finger lands)', true);
-      hint('Off: the centre is fixed in the middle of the stick area, so where you touch already sets the direction and speed.');
-      sw('Stick on the spacebar only', false);
-      hint('The stick only starts on the spacebar; other touches in the middle do nothing. The click zones stay at the sides. Pressing Space down still switches scroll mode.');
-      seek('Click zone width (each side)', 15, 45, 33, (v) => v + '% of the keyboard');
-      seek('Stick dead zone', 0, 60, 15, (v) => v === 0 ? 'none' : '≈ ' + (v / 1000 * 78).toFixed(1) + ' mm');
-      seek('Distance for top speed', 4, 25, 10, (v) => '≈ ' + (v / 100 * 78).toFixed(0) + ' mm');
-      seek('Stick top speed', 2, 40, 12, (v) => (v / 10).toFixed(1) + ' screen widths/s');
-      seek('Stick response curve', 10, 40, 20, (v) => v === 10 ? 'linear' : (v / 10).toFixed(1) + ' (finer near the centre)');
-      hint('Speed, acceleration, tap to click and tap-then-drag are for touchpad mode; the stick has its own settings above.');
       section('Clicking');
       sw('Tap to click', true);
       sw('Tap, then touch and move to drag (adds a short click delay)', true);
@@ -212,6 +199,19 @@
       keyBinding('Long press', 'Alt + Enter');
       hint('Click and long press act at the pointer while pointer mode is on.');
       spinner('Letter keys in pointer mode', 'Do nothing');
+      section('Joystick mode');
+      sw('Joystick mode', false);
+      hint('Splits the keyboard into thirds. Middle: a joystick. Touch, then hold your finger away from where it landed; the further away, the faster the pointer moves (your finger may leave the middle). Left: tap to click, tap twice to hold a drag (steer with the stick, tap either side to let go). Right: tap to long press. Taps in the middle do nothing. In scroll mode (Space) the stick scrolls.');
+      sw('Floating centre (where your finger lands)', true);
+      hint('Off: the centre is fixed in the middle of the stick area, so where you touch already sets the direction and speed.');
+      sw('Stick on the spacebar only', false);
+      hint('The stick only starts on the spacebar; other touches in the middle do nothing. The click zones stay at the sides. Pressing Space down still switches scroll mode.');
+      seek('Click zone width (each side)', 15, 45, 33, (v) => v + '% of the keyboard');
+      seek('Stick dead zone', 0, 60, 15, (v) => v === 0 ? 'none' : '≈ ' + (v / 1000 * 78).toFixed(1) + ' mm');
+      seek('Distance for top speed', 4, 25, 10, (v) => '≈ ' + (v / 100 * 78).toFixed(0) + ' mm');
+      seek('Stick top speed', 2, 40, 12, (v) => (v / 10).toFixed(1) + ' screen widths/s');
+      seek('Stick response curve', 10, 40, 20, (v) => v === 10 ? 'linear' : (v / 10).toFixed(1) + ' (finer near the centre)');
+      hint('Speed, acceleration, tap to click and tap-then-drag are for touchpad mode; the stick has its own settings above.');
     },
     () => {
       section('Keyboard input probe');
