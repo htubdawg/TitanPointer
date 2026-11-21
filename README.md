@@ -80,7 +80,8 @@ The scroll assistant is Settings.Global `touchpad_switch_value` (1 on, 0 off); t
 
 ## Install
 
-1. Install [`dist/TitanPointer-1.24.apk`](dist/TitanPointer-1.24.apk).
+1. Install the APK from the [latest release](https://github.com/htubdawg/titanpointer/releases/latest)
+   (or [`dist/TitanPointer-1.24.apk`](dist/TitanPointer-1.24.apk) in this repository).
 2. Open **TitanPointer** and turn on its accessibility service (Settings → Accessibility → TitanPointer).
    It draws the pointer, sends taps and swipes at the pointer, and reads key presses for the shortcuts.
    Nothing is collected or sent anywhere.
@@ -138,6 +139,10 @@ helper).
 ./gradlew assembleRelease    # app/build/outputs/apk/release/app-release.apk
 native/build.sh              # rebuild the helper into app/src/main/jniLibs/arm64-v8a/libtitanpad.so
 ```
+
+**Releases:** after bumping `versionName` in `app/build.gradle` and merging to `main`, run the **Release**
+workflow (Actions → Release → Run workflow, optionally with release notes). It runs the unit tests, builds the
+APK and publishes it as release `v<versionName>` ("Version <versionName>"), and stops if that release exists.
 
 Builds are signed with `signing/titanpointer.keystore`, a throwaway key kept in the repo so every build
 can update an installed copy. Use your own key if you distribute it.
